@@ -1,0 +1,44 @@
+[package]
+name = "lr1110-rs"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/leftger/lr1110-rs"
+categories = ["embedded", "no-std", "asynchronous"]
+keywords = ["lr1110", "gnss", "wifi", "lora", "semtech"]
+description = "Extended LR1110 functionality (GNSS, WiFi, Crypto, Ranging) for use with lora-phy"
+rust-version = "1.82"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+# Core dependency on lora-phy for base LR1110 support
+# Use path dependency for local development, switch to git/crates.io for release
+lora-phy = { path = "../lora-rs/lora-phy" }
+
+# Embedded HAL traits
+embedded-hal = { version = "1" }
+embedded-hal-async = { version = "1" }
+
+# Optional defmt support
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = ["gnss", "wifi", "crypto", "ranging"]
+
+## Enable GNSS (GPS/BeiDou) scanning functionality
+gnss = []
+
+## Enable WiFi passive scanning functionality
+wifi = []
+
+## Enable Crypto Engine (AES, CMAC, key management)
+crypto = []
+
+## Enable RTToF (Round-Trip Time of Flight) ranging
+ranging = []
+
+## Use defmt for logging
+defmt-03 = ["dep:defmt", "lora-phy/defmt-03"]
