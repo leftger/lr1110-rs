@@ -15,9 +15,6 @@
 #![no_std]
 #![no_main]
 
-#[path = "../iv.rs"]
-mod iv;
-
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
@@ -30,17 +27,15 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::lr1110::LR_FHSS_DEFAULT_SYNC_WORD;
+use lora_phy::iv::GenericLr1110InterfaceVariant;
 use lora_phy::lr1110::radio_kind_params::{
     LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params, PaSelection,
 };
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage, LR_FHSS_DEFAULT_SYNC_WORD};
 use lora_phy::mod_params::RadioMode;
 use lora_phy::mod_traits::RadioKind;
 use {defmt_rtt as _, panic_probe as _};
-
-use self::iv::Stm32wbaLr1110InterfaceVariant;
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
 bind_interrupts!(struct Irqs {
@@ -110,7 +105,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
-    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
+    let iv = GenericLr1110InterfaceVariant::new(reset, dio1, busy, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     // Use LP (Low Power) PA to match SWDM001 demo configuration

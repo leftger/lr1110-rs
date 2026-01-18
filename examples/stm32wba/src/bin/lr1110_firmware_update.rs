@@ -46,9 +46,6 @@
 #![no_std]
 #![no_main]
 
-#[path = "../iv.rs"]
-mod iv;
-
 #[path = "../lr1110_firmware_0401.rs"]
 mod firmware;
 
@@ -64,12 +61,11 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::{Delay, Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
+use lora_phy::iv::GenericLr1110InterfaceVariant;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
-use lora_phy::lr1110::{BOOTLOADER_FLASH_BLOCK_SIZE_WORDS, BootloaderVersion, Version};
+use lora_phy::lr1110::{BootloaderVersion, Version, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS};
 use {defmt_rtt as _, panic_probe as _};
-
-use self::iv::Stm32wbaLr1110InterfaceVariant;
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
 bind_interrupts!(struct Irqs {
@@ -218,7 +214,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
-    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
+    let iv = GenericLr1110InterfaceVariant::new(reset, dio1, busy, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
