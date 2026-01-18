@@ -28,13 +28,16 @@ use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericLr1110InterfaceVariant;
-use lora_phy::lr1110::radio_kind_params::{
-    LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params, PaSelection,
-};
+use lora_phy::lr1110::radio_kind_params::PaSelection;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage, LR_FHSS_DEFAULT_SYNC_WORD};
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_params::RadioMode;
 use lora_phy::mod_traits::RadioKind;
+use lr1110_rs::lr_fhss::{
+    lr_fhss_get_hop_sequence_count, LrFhssBandwidth, LrFhssCodingRate, LrFhssExt, LrFhssGrid,
+    LrFhssModulationType, LrFhssParams, LrFhssV1Params, LR_FHSS_DEFAULT_SYNC_WORD,
+};
+use lr1110_rs::regmem::RegMemExt;
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -208,7 +211,7 @@ async fn main(_spawner: Spawner) {
             .unwrap();
 
         // Get hop sequence ID
-        let hop_sequence_count = lr1110_module::lr_fhss_get_hop_sequence_count(&lr_fhss_params);
+        let hop_sequence_count = lr_fhss_get_hop_sequence_count(&lr_fhss_params);
         let hop_sequence_id = (packet_count % hop_sequence_count as u32) as u16;
         info!(
             "Using hop_sequence_id = {} (out of {} sequences)",

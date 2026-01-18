@@ -26,7 +26,7 @@ embedded-hal-async = { version = "1" }
 defmt = { version = "0.3", optional = true }
 
 [features]
-default = ["gnss", "wifi", "crypto", "ranging"]
+default = ["gnss", "wifi", "crypto", "ranging", "gfsk", "lr_fhss", "system", "bootloader", "regmem"]
 
 ## Enable GNSS (GPS/BeiDou) scanning functionality
 gnss = []
@@ -39,6 +39,21 @@ crypto = []
 
 ## Enable RTToF (Round-Trip Time of Flight) ranging
 ranging = []
+
+## Enable GFSK modulation support
+gfsk = []
+
+## Enable LR-FHSS (Long Range Frequency Hopping Spread Spectrum) support
+lr_fhss = []
+
+## Enable system diagnostic functions (temperature, voltage, RNG, UID)
+system = []
+
+## Enable bootloader functions for firmware update
+bootloader = []
+
+## Enable low-level register/memory access
+regmem = []
 
 ## Use defmt for logging
 defmt-03 = ["dep:defmt", "lora-phy/defmt-03"]

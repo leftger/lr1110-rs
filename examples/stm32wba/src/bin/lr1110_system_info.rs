@@ -36,6 +36,7 @@ use lora_phy::iv::GenericLr1110InterfaceVariant;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
+use lr1110_rs::system::SystemExt;
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -228,32 +229,32 @@ async fn main(_spawner: Spawner) {
     info!("Error Status:");
     match radio.get_errors().await {
         Ok(errors) => {
-            if errors == 0 {
+            if !errors.has_errors() {
                 info!("  No errors");
             } else {
-                warn!("  Error flags: 0x{:04X}", errors);
-                if errors & 0x01 != 0 {
+                warn!("  Error flags: 0x{:04X}", errors.raw);
+                if errors.lf_rc_calib_error() {
                     warn!("    - LF RC calibration error");
                 }
-                if errors & 0x02 != 0 {
+                if errors.hf_rc_calib_error() {
                     warn!("    - HF RC calibration error");
                 }
-                if errors & 0x04 != 0 {
+                if errors.adc_calib_error() {
                     warn!("    - ADC calibration error");
                 }
-                if errors & 0x08 != 0 {
+                if errors.pll_calib_error() {
                     warn!("    - PLL calibration error");
                 }
-                if errors & 0x10 != 0 {
+                if errors.img_calib_error() {
                     warn!("    - Image calibration error");
                 }
-                if errors & 0x20 != 0 {
+                if errors.hf_xosc_start_error() {
                     warn!("    - HF XOSC start error");
                 }
-                if errors & 0x40 != 0 {
+                if errors.lf_xosc_start_error() {
                     warn!("    - LF XOSC start error");
                 }
-                if errors & 0x80 != 0 {
+                if errors.pll_lock_error() {
                     warn!("    - PLL lock error");
                 }
             }

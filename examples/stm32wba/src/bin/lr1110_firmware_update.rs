@@ -62,9 +62,10 @@ use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::{Delay, Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericLr1110InterfaceVariant;
+use lora_phy::lr1110::radio_kind_params::Version;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
-use lora_phy::lr1110::{BootloaderVersion, Version, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS};
+use lr1110_rs::bootloader::{BootloaderExt, BootloaderVersion, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS};
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -438,7 +439,7 @@ where
         .map_err(|_| "failed to get version after reboot")?;
 
     info!("  Hardware version: 0x{:02X}", version.hw);
-    info!("  Chip type: 0x{:02X}", version.chip_type);
+    info!("  Chip type: {:?}", version.chip_type);
     info!("  Firmware version: 0x{:04X}", version.fw);
 
     // Verify the firmware version matches expected
