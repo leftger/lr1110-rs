@@ -36,7 +36,7 @@ use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use lr1110_rs::wifi::{WifiExt, WIFI_ALL_CHANNELS_MASK, WIFI_MAX_RESULTS, WifiBasicMacTypeChannelResult, WifiScanMode, WifiSignalTypeScan};
-use lr1110_rs::system::{SystemExt, StandbyConfig, RfSwitchConfig, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH, IRQ_WIFI_SCAN_DONE};
+use lr1110_rs::system::{SystemExt, StandbyConfig, RfSwitchConfig, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH};
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -259,30 +259,11 @@ async fn main(_spawner: Spawner) {
 
         info!("  Scan started, waiting for completion...");
 
-        // Clear any previous IRQs
-        let _ = SystemExt::clear_irq_status(&mut radio, IRQ_WIFI_SCAN_DONE).await;
-
-        // Wait for scan to complete by polling IRQ status
-        // In a production application, you would use DIO1 interrupt
-        let mut scan_done = false;
-        for _ in 0..80 {
-            // Poll every 200ms for up to 16 seconds
-            embassy_time::Timer::after_millis(200).await;
-
-            if let Ok(irq_status) = SystemExt::get_irq_status(&mut radio).await {
-                if irq_status & IRQ_WIFI_SCAN_DONE != 0 {
-                    info!("  WiFi scan completed (IRQ detected)");
-                    // Clear the IRQ
-                    let _ = SystemExt::clear_irq_status(&mut radio, IRQ_WIFI_SCAN_DONE).await;
-                    scan_done = true;
-                    break;
-                }
-            }
-        }
-
-        if !scan_done {
-            warn!("  WiFi scan timeout (no IRQ received)");
-        }
+        // Wait for scan to complete
+        // In a real application, you would wait for the WifiScanDone IRQ via DIO1
+        // For simplicity, we use a fixed timeout here
+        // (14 channels * 10 scans * 90ms = ~12.6 seconds max)
+        embassy_time::Timer::after_secs(15).await;
 
         // Get number of results
         let nb_results = match radio.wifi_get_nb_results().await {
