@@ -95,11 +95,12 @@ use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
-    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
+    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk,
+    VoltageScale,
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use embassy_time::{Delay, Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
@@ -109,8 +110,8 @@ use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use lr1110_rs::radio::RadioControlExt;
 use lr1110_rs::ranging::{
-    ranging_channels, ranging_config, lora_bw, lora_sf, lora_cr, packet_type,
-    calculate_ranging_request_delay_ms, RangingExt,
+    calculate_ranging_request_delay_ms, lora_bw, lora_cr, lora_sf, packet_type, ranging_channels,
+    ranging_config, RangingExt,
 };
 use {defmt_rtt as _, panic_probe as _};
 
@@ -293,7 +294,8 @@ impl RangingSession {
     fn output_results(&self) {
         info!("{{");
         info!("  \"SF\": \"SF{}\",", LORA_SF);
-        info!("  \"BW\": \"BW{}\",",
+        info!(
+            "  \"BW\": \"BW{}\",",
             match LORA_BW {
                 lora_bw::BW_125 => 125,
                 lora_bw::BW_250 => 250,
@@ -312,11 +314,15 @@ impl RangingSession {
             let comma = if i < self.result_count - 1 { "," } else { "" };
 
             if result.valid {
-                info!("      {{ \"freq\": {}, \"dist_m\": {}, \"rssi\": {} }}{}",
-                    result.frequency, result.distance_m, result.rssi, comma);
+                info!(
+                    "      {{ \"freq\": {}, \"dist_m\": {}, \"rssi\": {} }}{}",
+                    result.frequency, result.distance_m, result.rssi, comma
+                );
             } else {
-                info!("      {{ \"freq\": {}, \"error\": true }}{}",
-                    result.frequency, comma);
+                info!(
+                    "      {{ \"freq\": {}, \"error\": true }}{}",
+                    result.frequency, comma
+                );
             }
         }
 
@@ -331,7 +337,11 @@ impl RangingSession {
         if let Some(gamma) = self.calculate_gamma() {
             // Convert to integer with 2 decimal places for display
             let gamma_int = (gamma * 100.0) as i32;
-            info!("    \"FinalGamma\": \"{}.{:02}\",", gamma_int / 100, gamma_int.abs() % 100);
+            info!(
+                "    \"FinalGamma\": \"{}.{:02}\",",
+                gamma_int / 100,
+                gamma_int.abs() % 100
+            );
         } else {
             info!("    \"FinalGamma\": \"N/A\",");
         }
@@ -429,23 +439,41 @@ async fn main(_spawner: Spawner) {
 
     info!("Configuration:");
     info!("  SF: {}", LORA_SF);
-    info!("  BW: {} kHz", match LORA_BW {
-        lora_bw::BW_125 => 125,
-        lora_bw::BW_250 => 250,
-        lora_bw::BW_500 => 500,
-        _ => 500,
-    });
+    info!(
+        "  BW: {} kHz",
+        match LORA_BW {
+            lora_bw::BW_125 => 125,
+            lora_bw::BW_250 => 250,
+            lora_bw::BW_500 => 500,
+            _ => 500,
+        }
+    );
     info!("  Address: 0x{:08X}", RANGING_ADDRESS);
     info!("  Channels: {}", RANGING_CHANNELS.len());
     info!("==============================================");
 
     // Set up ranging parameters
-    radio.rttof_set_address(RANGING_ADDRESS, ranging_config::SUBORDINATE_CHECK_LENGTH_BYTES).await.unwrap();
-    radio.rttof_set_request_address(RANGING_ADDRESS).await.unwrap();
-    radio.rttof_set_parameters(ranging_config::RESPONSE_SYMBOLS_COUNT).await.unwrap();
+    radio
+        .rttof_set_address(
+            RANGING_ADDRESS,
+            ranging_config::SUBORDINATE_CHECK_LENGTH_BYTES,
+        )
+        .await
+        .unwrap();
+    radio
+        .rttof_set_request_address(RANGING_ADDRESS)
+        .await
+        .unwrap();
+    radio
+        .rttof_set_parameters(ranging_config::RESPONSE_SYMBOLS_COUNT)
+        .await
+        .unwrap();
 
     // Configure LoRa sync word
-    radio.set_lora_sync_word(ranging_config::LORA_SYNC_WORD).await.unwrap();
+    radio
+        .set_lora_sync_word(ranging_config::LORA_SYNC_WORD)
+        .await
+        .unwrap();
 
     // Start with idle state
     session.state = RangingState::Idle;
@@ -465,14 +493,20 @@ async fn main(_spawner: Spawner) {
 
                 // Configure LoRa packet type
                 radio.set_packet_type(packet_type::LORA).await.unwrap();
-                radio.set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, 0).await.unwrap();
-                radio.set_lora_pkt_params(
-                    PREAMBLE_LENGTH,
-                    0, // Explicit header
-                    ranging_config::INIT_PAYLOAD_LENGTH as u8,
-                    1, // CRC on
-                    0, // IQ not inverted
-                ).await.unwrap();
+                radio
+                    .set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, 0)
+                    .await
+                    .unwrap();
+                radio
+                    .set_lora_pkt_params(
+                        PREAMBLE_LENGTH,
+                        0, // Explicit header
+                        ranging_config::INIT_PAYLOAD_LENGTH as u8,
+                        1, // CRC on
+                        0, // IQ not inverted
+                    )
+                    .await
+                    .unwrap();
 
                 if IS_MANAGER {
                     info!("  Manager: Sending address packet");
@@ -521,7 +555,10 @@ async fn main(_spawner: Spawner) {
 
                 // Try to read received data
                 let mut rx_buffer = [0u8; ranging_config::INIT_PAYLOAD_LENGTH];
-                match radio.read_buffer(0, ranging_config::INIT_PAYLOAD_LENGTH as u8, &mut rx_buffer).await {
+                match radio
+                    .read_buffer(0, ranging_config::INIT_PAYLOAD_LENGTH as u8, &mut rx_buffer)
+                    .await
+                {
                     Ok(_) => {
                         // Parse received address
                         let received_addr = ((rx_buffer[0] as u32) << 24)
@@ -559,7 +596,8 @@ async fn main(_spawner: Spawner) {
             RangingState::RangingStart => {
                 if session.channel_index < RANGING_CHANNELS.len() {
                     let channel_freq = RANGING_CHANNELS[session.channel_index];
-                    info!("  Channel {}/{}: {} Hz",
+                    info!(
+                        "  Channel {}/{}: {} Hz",
                         session.channel_index + 1,
                         RANGING_CHANNELS.len(),
                         channel_freq
@@ -624,9 +662,9 @@ async fn main(_spawner: Spawner) {
                             };
                             session.result_count += 1;
 
-                            info!("    Distance: {} m, RSSI: {} dBm",
-                                result.distance_m,
-                                result.rssi_dbm
+                            info!(
+                                "    Distance: {} m, RSSI: {} dBm",
+                                result.distance_m, result.rssi_dbm
                             );
                         }
                         Err(e) => {
@@ -666,7 +704,10 @@ async fn main(_spawner: Spawner) {
                 if IS_MANAGER {
                     session.output_results();
                 } else {
-                    info!("Subordinate completed {} ranging requests", session.result_count);
+                    info!(
+                        "Subordinate completed {} ranging requests",
+                        session.result_count
+                    );
                 }
 
                 info!("\nWaiting 10 seconds before next session...");

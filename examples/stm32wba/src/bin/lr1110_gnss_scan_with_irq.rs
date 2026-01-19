@@ -46,20 +46,27 @@ use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
-    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
+    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk,
+    VoltageScale,
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
-use lr1110_rs::iv::Lr1110InterfaceVariant;
-use lr1110_rs::gnss::{GnssExt, GnssDetectedSatellite, GNSS_BEIDOU_MASK, GNSS_GPS_MASK, GnssAssistancePosition, GnssSearchMode};
+use lr1110_rs::gnss::{
+    GnssAssistancePosition, GnssDetectedSatellite, GnssExt, GnssSearchMode, GNSS_BEIDOU_MASK,
+    GNSS_GPS_MASK,
+};
 use lr1110_rs::gnss_scan_manager::{GnssScanManager, ScanConfig, ScanMode};
-use lr1110_rs::system::{SystemExt, StandbyConfig, RfSwitchConfig, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH, IRQ_GNSS_SCAN_DONE, IRQ_NONE};
+use lr1110_rs::iv::Lr1110InterfaceVariant;
+use lr1110_rs::system::{
+    RfSwitchConfig, StandbyConfig, SystemExt, IRQ_GNSS_SCAN_DONE, IRQ_NONE, RFSW0_HIGH, RFSW1_HIGH,
+    RFSW2_HIGH, RFSW3_HIGH,
+};
 use {defmt_rtt as _, panic_probe as _};
 
 // ============================================================================
@@ -252,10 +259,12 @@ async fn main(_spawner: Spawner) {
         tx: RFSW0_HIGH | RFSW1_HIGH,
         tx_hp: RFSW1_HIGH,
         tx_hf: 0x00,
-        gnss: RFSW2_HIGH,  // DIO7 controls BGA524N6 LNA
+        gnss: RFSW2_HIGH, // DIO7 controls BGA524N6 LNA
         wifi: RFSW3_HIGH,
     };
-    SystemExt::set_dio_as_rf_switch(&mut radio, &rf_switch_cfg).await.unwrap();
+    SystemExt::set_dio_as_rf_switch(&mut radio, &rf_switch_cfg)
+        .await
+        .unwrap();
 
     // Configure GNSS assistance position
     let assistance_position = GnssAssistancePosition {
@@ -263,11 +272,16 @@ async fn main(_spawner: Spawner) {
         longitude: GNSS_LONGITUDE,
     };
 
-    if let Err(e) = radio.gnss_set_assistance_position(&assistance_position).await {
+    if let Err(e) = radio
+        .gnss_set_assistance_position(&assistance_position)
+        .await
+    {
         error!("  Failed to set assistance position: {:?}", e);
     } else {
-        info!("  Set assistance position: lat={}, lon={}",
-            assistance_position.latitude, assistance_position.longitude);
+        info!(
+            "  Set assistance position: lat={}, lon={}",
+            assistance_position.latitude, assistance_position.longitude
+        );
     }
 
     // ========================================================================
@@ -296,7 +310,7 @@ async fn main(_spawner: Spawner) {
                     scan_group_size: MOBILE_SCAN_GROUP_SIZE,
                     scan_group_delay_s: MOBILE_SCAN_DELAY_S,
                 },
-                "Mobile"
+                "Mobile",
             )
         }
         ExampleScanMode::Static => {
@@ -309,7 +323,7 @@ async fn main(_spawner: Spawner) {
                     scan_group_size: STATIC_SCAN_GROUP_SIZE,
                     scan_group_delay_s: STATIC_SCAN_DELAY_S,
                 },
-                "Static"
+                "Static",
             )
         }
     };
@@ -320,7 +334,7 @@ async fn main(_spawner: Spawner) {
         mode: scan_mode,
         aggregate_results: false,
         max_retries: 3,
-        scan_timeout_ms: 20_000,  // 20 seconds for assisted scan
+        scan_timeout_ms: 20_000, // 20 seconds for assisted scan
     };
 
     info!("-------------------------------------------");
@@ -342,13 +356,21 @@ async fn main(_spawner: Spawner) {
 
         // Check if this is a new scan group
         if !scan_manager.is_scan_group_active() {
-            info!("Starting new scan group (token: 0x{:02X})", scan_manager.get_token());
+            info!(
+                "Starting new scan group (token: 0x{:02X})",
+                scan_manager.get_token()
+            );
         } else {
-            info!("Continuing scan group ({}/{} complete)",
+            info!(
+                "Continuing scan group ({}/{} complete)",
                 scan_manager.valid_scan_count(),
                 match scan_mode {
-                    ScanMode::Mobile { scan_group_size, .. } => scan_group_size,
-                    ScanMode::Static { scan_group_size, .. } => scan_group_size,
+                    ScanMode::Mobile {
+                        scan_group_size, ..
+                    } => scan_group_size,
+                    ScanMode::Static {
+                        scan_group_size, ..
+                    } => scan_group_size,
                 }
             );
         }
@@ -369,15 +391,21 @@ async fn main(_spawner: Spawner) {
                 // Read and display satellite details
                 if result.num_satellites > 0 {
                     let mut satellites = [GnssDetectedSatellite::default(); 32];
-                    match radio.gnss_get_satellites(&mut satellites, result.num_satellites).await {
+                    match radio
+                        .gnss_get_satellites(&mut satellites, result.num_satellites)
+                        .await
+                    {
                         Ok(count) => {
                             info!("  Satellite details:");
-                            for i in 0..count.min(10) as usize {  // Show first 10
+                            for i in 0..count.min(10) as usize {
+                                // Show first 10
                                 let sv = &satellites[i];
                                 let constellation = constellation_name(sv.satellite_id);
                                 let prn = sv_id_to_prn(sv.satellite_id);
-                                info!("    {} PRN {}: C/N={}dB, Doppler={}Hz",
-                                    constellation, prn, sv.cnr, sv.doppler);
+                                info!(
+                                    "    {} PRN {}: C/N={}dB, Doppler={}Hz",
+                                    constellation, prn, sv.cnr, sv.doppler
+                                );
                             }
 
                             // Summary by constellation
@@ -389,7 +417,10 @@ async fn main(_spawner: Spawner) {
                                 .iter()
                                 .filter(|s| s.satellite_id >= 64 && s.satellite_id < 128)
                                 .count();
-                            info!("  Summary: {} GPS, {} BeiDou satellites", gps_count, beidou_count);
+                            info!(
+                                "  Summary: {} GPS, {} BeiDou satellites",
+                                gps_count, beidou_count
+                            );
                         }
                         Err(e) => {
                             error!("  Failed to get satellite details: {:?}", e);
@@ -402,8 +433,14 @@ async fn main(_spawner: Spawner) {
                 info!("Performance Metrics:");
                 info!("  Scan manager state:");
                 info!("    Current token: 0x{:02X}", scan_manager.get_token());
-                info!("    Valid scans in group: {}", scan_manager.valid_scan_count());
-                info!("    Scan group active: {}", scan_manager.is_scan_group_active());
+                info!(
+                    "    Valid scans in group: {}",
+                    scan_manager.valid_scan_count()
+                );
+                info!(
+                    "    Scan group active: {}",
+                    scan_manager.is_scan_group_active()
+                );
 
                 // Show radio planner state
                 let planner = scan_manager.radio_planner();

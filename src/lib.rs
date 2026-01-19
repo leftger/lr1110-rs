@@ -295,6 +295,9 @@ pub use radio::{
 // System module types
 #[cfg(feature = "system")]
 pub use system::{
+    // Helper functions
+    convert_temp_to_celsius,
+    convert_vbat_to_volts,
     // Core types
     CalibrationParam,
     // Status types
@@ -311,9 +314,6 @@ pub use system::{
     SystemErrors,
     TcxoVoltage,
     Version,
-    // Helper functions
-    convert_temp_to_celsius,
-    convert_vbat_to_volts,
     // Calibration constants
     CALIB_ADC_MASK,
     CALIB_ALL,

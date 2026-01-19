@@ -41,19 +41,26 @@ use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
-    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
+    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk,
+    VoltageScale,
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
+use lr1110_rs::gnss::{
+    GnssAssistancePosition, GnssDestination, GnssDetectedSatellite, GnssExt, GnssSearchMode,
+    GNSS_BEIDOU_MASK, GNSS_GPS_MASK, GNSS_SINGLE_ALMANAC_READ_SIZE,
+};
 use lr1110_rs::iv::Lr1110InterfaceVariant;
-use lr1110_rs::gnss::{GnssExt, GnssDetectedSatellite, GNSS_BEIDOU_MASK, GNSS_GPS_MASK, GNSS_SINGLE_ALMANAC_READ_SIZE, GnssAssistancePosition, GnssDestination, GnssSearchMode};
-use lr1110_rs::system::{SystemExt, StandbyConfig, RfSwitchConfig, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH, convert_temp_to_celsius, convert_vbat_to_volts};
+use lr1110_rs::system::{
+    convert_temp_to_celsius, convert_vbat_to_volts, RfSwitchConfig, StandbyConfig, SystemExt,
+    RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH,
+};
 use {defmt_rtt as _, panic_probe as _};
 
 // ============================================================================
@@ -222,7 +229,10 @@ async fn main(_spawner: Spawner) {
             // Convert to fixed-point for defmt (no float support)
             let temp_int = temp_c as i16;
             let temp_frac = ((temp_c - temp_int as f32) * 10.0) as u8;
-            info!("  Temperature: {}.{}°C (raw: 0x{:04X})", temp_int, temp_frac, temp_raw);
+            info!(
+                "  Temperature: {}.{}°C (raw: 0x{:04X})",
+                temp_int, temp_frac, temp_raw
+            );
         }
         Err(e) => {
             warn!("  Failed to read temperature: {:?}", e);
@@ -235,7 +245,10 @@ async fn main(_spawner: Spawner) {
             // Convert to fixed-point for defmt (no float support)
             let vbat_int = vbat_v as u16;
             let vbat_frac = ((vbat_v - vbat_int as f32) * 100.0) as u8;
-            info!("  Battery voltage: {}.{:02}V (raw: 0x{:02X})", vbat_int, vbat_frac, vbat_raw);
+            info!(
+                "  Battery voltage: {}.{:02}V (raw: 0x{:02X})",
+                vbat_int, vbat_frac, vbat_raw
+            );
         }
         Err(e) => {
             warn!("  Failed to read battery voltage: {:?}", e);
@@ -274,16 +287,18 @@ async fn main(_spawner: Spawner) {
     // - RFSW3 (DIO8): WiFi LNA enable (if present)
     info!("Configuring RF switches for GNSS LNA...");
     let rf_switch_cfg = RfSwitchConfig {
-        enable: 0xFF,                    // Enable all switches
-        standby: 0x00,                   // Standby: no switches active
-        rx: RFSW0_HIGH,                  // RX: RFSW0 (DIO5)
-        tx: RFSW0_HIGH | RFSW1_HIGH,     // TX: RFSW0 + RFSW1
-        tx_hp: RFSW1_HIGH,               // TX HP: RFSW1 (DIO6)
-        tx_hf: 0x00,                     // TX HF: none
-        gnss: RFSW2_HIGH,                // GNSS: RFSW2 (DIO7) - BGA524N6 LNA
-        wifi: RFSW3_HIGH,                // WiFi: RFSW3 (DIO8)
+        enable: 0xFF,                // Enable all switches
+        standby: 0x00,               // Standby: no switches active
+        rx: RFSW0_HIGH,              // RX: RFSW0 (DIO5)
+        tx: RFSW0_HIGH | RFSW1_HIGH, // TX: RFSW0 + RFSW1
+        tx_hp: RFSW1_HIGH,           // TX HP: RFSW1 (DIO6)
+        tx_hf: 0x00,                 // TX HF: none
+        gnss: RFSW2_HIGH,            // GNSS: RFSW2 (DIO7) - BGA524N6 LNA
+        wifi: RFSW3_HIGH,            // WiFi: RFSW3 (DIO8)
     };
-    SystemExt::set_dio_as_rf_switch(&mut radio, &rf_switch_cfg).await.unwrap();
+    SystemExt::set_dio_as_rf_switch(&mut radio, &rf_switch_cfg)
+        .await
+        .unwrap();
 
     // Read GNSS firmware version
     info!("-------------------------------------------");
@@ -332,7 +347,10 @@ async fn main(_spawner: Spawner) {
         longitude: GNSS_LONGITUDE,
     };
 
-    if let Err(e) = radio.gnss_set_assistance_position(&assistance_position).await {
+    if let Err(e) = radio
+        .gnss_set_assistance_position(&assistance_position)
+        .await
+    {
         error!("  Failed to set assistance position: {:?}", e);
     } else {
         info!(
@@ -344,7 +362,10 @@ async fn main(_spawner: Spawner) {
     // Read back the assistance position to verify
     match radio.gnss_read_assistance_position().await {
         Ok(pos) => {
-            info!("  Verified position: lat={}, lon={}", pos.latitude, pos.longitude);
+            info!(
+                "  Verified position: lat={}, lon={}",
+                pos.latitude, pos.longitude
+            );
         }
         Err(e) => {
             error!("  Failed to read assistance position: {:?}", e);
@@ -361,7 +382,10 @@ async fn main(_spawner: Spawner) {
             info!("  Almanac CRC: 0x{:08X}", status.global_almanac_crc);
             info!("  Error code: {:?}", status.error_code);
             info!("  GPS almanac update needed: {}", status.almanac_update_gps);
-            info!("  BeiDou almanac update needed: {}", status.almanac_update_beidou);
+            info!(
+                "  BeiDou almanac update needed: {}",
+                status.almanac_update_beidou
+            );
             needs_almanac_update = status.almanac_update_gps || status.almanac_update_beidou;
         }
         Err(e) => {
@@ -434,7 +458,10 @@ async fn main(_spawner: Spawner) {
     if INTERLEAVED_ALMANAC_UPDATE && needs_almanac_update {
         info!("-------------------------------------------");
         info!("Interleaved almanac update enabled.");
-        info!("  Will attempt {}s almanac updates between scans.", INTERLEAVED_UPDATE_DURATION_SECS);
+        info!(
+            "  Will attempt {}s almanac updates between scans.",
+            INTERLEAVED_UPDATE_DURATION_SECS
+        );
         info!("  Full almanac takes ~12.5 minutes across multiple cycles.");
     }
 
@@ -493,7 +520,10 @@ async fn main(_spawner: Spawner) {
         let mut result_buffer = [0u8; 256];
         let read_size = (result_size as usize).min(result_buffer.len());
 
-        if let Err(e) = radio.gnss_read_results(&mut result_buffer[..read_size]).await {
+        if let Err(e) = radio
+            .gnss_read_results(&mut result_buffer[..read_size])
+            .await
+        {
             error!("  Failed to read results: {:?}", e);
             embassy_time::Timer::after_secs(5).await;
             continue;
@@ -520,7 +550,10 @@ async fn main(_spawner: Spawner) {
                                 let prn = sv_id_to_prn(sv.satellite_id);
 
                                 // Try to read almanac age for this satellite
-                                let almanac_info = match radio.gnss_read_almanac_per_satellite(sv.satellite_id).await {
+                                let almanac_info = match radio
+                                    .gnss_read_almanac_per_satellite(sv.satellite_id)
+                                    .await
+                                {
                                     Ok(almanac) => {
                                         let age = parse_almanac_age(&almanac);
                                         if age == 0 {
@@ -582,7 +615,10 @@ async fn main(_spawner: Spawner) {
 
             if almanac_needed {
                 info!("-------------------------------------------");
-                info!("Interleaved Almanac Update ({}s)", INTERLEAVED_UPDATE_DURATION_SECS);
+                info!(
+                    "Interleaved Almanac Update ({}s)",
+                    INTERLEAVED_UPDATE_DURATION_SECS
+                );
 
                 let initial_crc = match radio.gnss_get_context_status().await {
                     Ok(status) => status.global_almanac_crc,
@@ -611,8 +647,16 @@ async fn main(_spawner: Spawner) {
                                     elapsed_secs,
                                     status.global_almanac_crc,
                                     if crc_changed { " (updated)" } else { "" },
-                                    if status.almanac_update_gps { "needs update" } else { "OK" },
-                                    if status.almanac_update_beidou { "needs update" } else { "OK" }
+                                    if status.almanac_update_gps {
+                                        "needs update"
+                                    } else {
+                                        "OK"
+                                    },
+                                    if status.almanac_update_beidou {
+                                        "needs update"
+                                    } else {
+                                        "OK"
+                                    }
                                 );
 
                                 // Early exit if both constellations are complete

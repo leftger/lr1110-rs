@@ -64,7 +64,9 @@ use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::almanac::{AlmanacManager, UpdateStrategy, ALMANAC_FULL_UPDATE_DURATION_S};
-use lr1110_rs::gnss::{GnssAssistancePosition, GnssExt, GnssSearchMode, GNSS_BEIDOU_MASK, GNSS_GPS_MASK};
+use lr1110_rs::gnss::{
+    GnssAssistancePosition, GnssExt, GnssSearchMode, GNSS_BEIDOU_MASK, GNSS_GPS_MASK,
+};
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use lr1110_rs::system::{
     RfSwitchConfig, StandbyConfig, SystemExt, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH,
@@ -130,7 +132,13 @@ async fn main(_spawner: Spawner) {
     spi_config.frequency = Hertz(8_000_000);
 
     let spi = Spi::new(
-        p.SPI2, p.PB10, p.PC3, p.PA9, p.GPDMA1_CH0, p.GPDMA1_CH1, spi_config,
+        p.SPI2,
+        p.PB10,
+        p.PC3,
+        p.PA9,
+        p.GPDMA1_CH0,
+        p.GPDMA1_CH1,
+        spi_config,
     );
 
     let nss = Output::new(p.PD14, Level::High, Speed::VeryHigh);
@@ -192,7 +200,10 @@ async fn main(_spawner: Spawner) {
         .gnss_set_assistance_position(&assistance_position)
         .await
         .unwrap();
-    info!("Assistance position: lat={}, lon={}", GNSS_LATITUDE, GNSS_LONGITUDE);
+    info!(
+        "Assistance position: lat={}, lon={}",
+        GNSS_LATITUDE, GNSS_LONGITUDE
+    );
 
     // ========================================================================
     // Initialize Almanac Manager
@@ -239,7 +250,11 @@ async fn main(_spawner: Spawner) {
         info!("");
         info!("GPS Constellation:");
         info!("  Total satellites: {}", status.gps.total_count);
-        info!("  Fresh: {} ({}%)", status.gps.fresh_count, status.gps.completion_percentage());
+        info!(
+            "  Fresh: {} ({}%)",
+            status.gps.fresh_count,
+            status.gps.completion_percentage()
+        );
         info!("  Stale: {}", status.gps.stale_count);
         info!("  No data: {}", status.gps.no_data_count);
         info!("  Average age: {} days", status.gps.average_age_days);
@@ -250,7 +265,11 @@ async fn main(_spawner: Spawner) {
         info!("");
         info!("BeiDou Constellation:");
         info!("  Total satellites: {}", status.beidou.total_count);
-        info!("  Fresh: {} ({}%)", status.beidou.fresh_count, status.beidou.completion_percentage());
+        info!(
+            "  Fresh: {} ({}%)",
+            status.beidou.fresh_count,
+            status.beidou.completion_percentage()
+        );
         info!("  Stale: {}", status.beidou.stale_count);
         info!("  No data: {}", status.beidou.no_data_count);
         info!("  Average age: {} days", status.beidou.average_age_days);
@@ -393,15 +412,18 @@ async fn main(_spawner: Spawner) {
                 Ok(new_status) => {
                     info!("");
                     info!("Almanac Improvement:");
-                    info!("  GPS: {}% → {}%",
+                    info!(
+                        "  GPS: {}% → {}%",
                         status.gps.completion_percentage(),
                         new_status.gps.completion_percentage()
                     );
-                    info!("  BeiDou: {}% → {}%",
+                    info!(
+                        "  BeiDou: {}% → {}%",
                         status.beidou.completion_percentage(),
                         new_status.beidou.completion_percentage()
                     );
-                    info!("  Overall: {}% → {}%",
+                    info!(
+                        "  Overall: {}% → {}%",
                         status.overall_completion(),
                         new_status.overall_completion()
                     );

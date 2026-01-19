@@ -54,16 +54,19 @@ use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Flex, Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
-    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
+    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk,
+    VoltageScale,
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use embassy_time::{Delay, Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::radio_kind_params::Version;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
-use lora_phy::lr1110::{self as lr1110_module, BootloaderVersion, TcxoCtrlVoltage, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS};
+use lora_phy::lr1110::{
+    self as lr1110_module, BootloaderVersion, TcxoCtrlVoltage, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS,
+};
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -252,7 +255,8 @@ async fn main(_spawner: Spawner) {
     // Create a custom InterfaceVariant using Flex for BUSY
     // We use a type alias to match the expected types
     use lr1110_rs::iv::Lr1110InterfaceVariantFlex;
-    let iv = Lr1110InterfaceVariantFlex::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
+    let iv =
+        Lr1110InterfaceVariantFlex::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
@@ -275,7 +279,13 @@ async fn main(_spawner: Spawner) {
     );
 
     // Perform the firmware update
-    let result = perform_firmware_update(&mut radio, FIRMWARE_TYPE, EXPECTED_FIRMWARE_VERSION, FIRMWARE_IMAGE).await;
+    let result = perform_firmware_update(
+        &mut radio,
+        FIRMWARE_TYPE,
+        EXPECTED_FIRMWARE_VERSION,
+        FIRMWARE_IMAGE,
+    )
+    .await;
 
     match result {
         Ok(FirmwareUpdateStatus::Ok) => {
@@ -370,7 +380,10 @@ where
     info!("Step 2: Reading device identifiers...");
 
     match radio.bootloader_read_pin().await {
-        Ok(pin) => info!("  PIN: {:02X}{:02X}{:02X}{:02X}", pin[0], pin[1], pin[2], pin[3]),
+        Ok(pin) => info!(
+            "  PIN: {:02X}{:02X}{:02X}{:02X}",
+            pin[0], pin[1], pin[2], pin[3]
+        ),
         Err(_) => warn!("  Failed to read PIN"),
     }
 
@@ -396,7 +409,10 @@ where
     info!("Step 3: Erasing flash memory...");
     info!("  This may take a few seconds...");
 
-    radio.bootloader_erase_flash().await.map_err(|_| "flash erase failed")?;
+    radio
+        .bootloader_erase_flash()
+        .await
+        .map_err(|_| "flash erase failed")?;
 
     // Wait for erase to complete
     Timer::after(Duration::from_millis(2000)).await;
@@ -409,7 +425,8 @@ where
     info!("Step 4: Writing firmware image...");
 
     let total_words = firmware_image.len();
-    let total_chunks = (total_words + BOOTLOADER_FLASH_BLOCK_SIZE_WORDS - 1) / BOOTLOADER_FLASH_BLOCK_SIZE_WORDS;
+    let total_chunks =
+        (total_words + BOOTLOADER_FLASH_BLOCK_SIZE_WORDS - 1) / BOOTLOADER_FLASH_BLOCK_SIZE_WORDS;
 
     info!("  Total words: {}", total_words);
     info!("  Total chunks: {}", total_chunks);
@@ -432,12 +449,18 @@ where
             match radio.bootloader_write_flash_encrypted(offset, chunk).await {
                 Ok(_) => break,
                 Err(e) if retries > 0 => {
-                    warn!("Flash write failed at offset {} (retries left: {}): {:?}", offset, retries, e);
+                    warn!(
+                        "Flash write failed at offset {} (retries left: {}): {:?}",
+                        offset, retries, e
+                    );
                     retries -= 1;
                     Timer::after(Duration::from_millis(100)).await;
                 }
                 Err(e) => {
-                    error!("Flash write failed permanently at offset {}: {:?}", offset, e);
+                    error!(
+                        "Flash write failed permanently at offset {}: {:?}",
+                        offset, e
+                    );
                     return Err("flash write failed after retries");
                 }
             }
@@ -453,7 +476,10 @@ where
         let last_decade = last_logged_progress / 10;
 
         if progress_decade != last_decade || words_written == total_words {
-            info!("  Progress: {}% ({}/{} words)", progress, words_written, total_words);
+            info!(
+                "  Progress: {}% ({}/{} words)",
+                progress, words_written, total_words
+            );
             last_logged_progress = progress;
         }
     }
@@ -466,7 +492,10 @@ where
     info!("Step 5: Rebooting to execute new firmware...");
 
     // Reboot and exit bootloader (run from flash)
-    radio.bootloader_reboot(false).await.map_err(|_| "reboot failed")?;
+    radio
+        .bootloader_reboot(false)
+        .await
+        .map_err(|_| "reboot failed")?;
 
     // Wait for chip to boot and initialize
     Timer::after(Duration::from_millis(2000)).await;

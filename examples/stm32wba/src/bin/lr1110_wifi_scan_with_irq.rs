@@ -56,8 +56,7 @@ use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use lr1110_rs::system::{
-    RfSwitchConfig, StandbyConfig, SystemExt, RFSW0_HIGH,
-    RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH,
+    RfSwitchConfig, StandbyConfig, SystemExt, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH,
 };
 use lr1110_rs::wifi::{
     WifiBasicMacTypeChannelResult, WifiExt, WifiScanMode, WifiSignalTypeScan,
@@ -138,10 +137,13 @@ async fn main(_spawner: Spawner) {
     spi_config.frequency = Hertz(8_000_000);
 
     let spi = Spi::new(
-        p.SPI2, p.PB10, // SCK
+        p.SPI2,
+        p.PB10, // SCK
         p.PC3,  // MOSI
         p.PA9,  // MISO
-        p.GPDMA1_CH0, p.GPDMA1_CH1, spi_config,
+        p.GPDMA1_CH0,
+        p.GPDMA1_CH1,
+        spi_config,
     );
 
     let nss = Output::new(p.PD14, Level::High, Speed::VeryHigh);
@@ -155,8 +157,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_rx: Option<Output<'_>> = None;
     let rf_switch_tx: Option<Output<'_>> = None;
 
-    let iv =
-        Lr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
+    let iv = Lr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     let lr_config = lr1110_module::Config {
         chip: Lr1110Chip::new(),

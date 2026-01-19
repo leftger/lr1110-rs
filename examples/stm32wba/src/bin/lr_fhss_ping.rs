@@ -20,18 +20,19 @@ use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
-    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
+    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk,
+    VoltageScale,
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::radio_kind_params::PaSelection;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{
-    self as lr1110_module, lr_fhss_get_hop_sequence_count, TcxoCtrlVoltage, LrFhssBandwidth,
-    LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params,
+    self as lr1110_module, lr_fhss_get_hop_sequence_count, LrFhssBandwidth, LrFhssCodingRate,
+    LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params, TcxoCtrlVoltage,
     LR_FHSS_DEFAULT_SYNC_WORD,
 };
 use lora_phy::mod_params::RadioMode;
@@ -132,7 +133,10 @@ async fn main(_spawner: Spawner) {
     lora_radio.lr_fhss_init().await.unwrap();
 
     // Set up IRQ params for TX
-    lora_radio.set_irq_params(Some(RadioMode::Transmit)).await.unwrap();
+    lora_radio
+        .set_irq_params(Some(RadioMode::Transmit))
+        .await
+        .unwrap();
 
     // Set RF frequency
     lora_radio.set_channel(RF_FREQUENCY).await.unwrap();
@@ -180,7 +184,10 @@ async fn main(_spawner: Spawner) {
     // Transmit continuously
     loop {
         packet_count += 1;
-        info!("Sending LR-FHSS packet #{} ({} bytes)", packet_count, payload_length);
+        info!(
+            "Sending LR-FHSS packet #{} ({} bytes)",
+            packet_count, payload_length
+        );
 
         // Apply High ACP workaround from SWDR001 (required before TX after sleep with retention)
         // This prevents unexpectedly high adjacent channel power in LoRa transmissions.
@@ -219,7 +226,11 @@ async fn main(_spawner: Spawner) {
 
         // Build and transmit LR-FHSS frame
         match lora_radio
-            .lr_fhss_build_frame(&lr_fhss_params, hop_sequence_id, &payload[0..payload_length])
+            .lr_fhss_build_frame(
+                &lr_fhss_params,
+                hop_sequence_id,
+                &payload[0..payload_length],
+            )
             .await
         {
             Ok(_) => {
@@ -250,7 +261,9 @@ async fn main(_spawner: Spawner) {
                 // DIO1 interrupt fired - TX is complete
                 // Note: LR1110 may auto-clear IRQ flags when DIO1 triggers,
                 // so we just clear any remaining flags and consider TX done
-                let _ = lora_radio.process_irq_event(RadioMode::Transmit, None, true).await;
+                let _ = lora_radio
+                    .process_irq_event(RadioMode::Transmit, None, true)
+                    .await;
                 info!("Packet sent successfully!");
             }
             Err(err) => {

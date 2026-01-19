@@ -25,11 +25,12 @@ use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
-    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
+    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk,
+    VoltageScale,
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
@@ -37,7 +38,7 @@ use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use lr1110_rs::radio::RadioControlExt;
-use lr1110_rs::system::{SystemErrors, SystemExt, convert_temp_to_celsius, convert_vbat_to_volts};
+use lr1110_rs::system::{convert_temp_to_celsius, convert_vbat_to_volts, SystemErrors, SystemExt};
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -165,7 +166,14 @@ async fn main(_spawner: Spawner) {
         Ok(join_eui) => {
             info!(
                 "  Join EUI: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                join_eui[0], join_eui[1], join_eui[2], join_eui[3], join_eui[4], join_eui[5], join_eui[6], join_eui[7]
+                join_eui[0],
+                join_eui[1],
+                join_eui[2],
+                join_eui[3],
+                join_eui[4],
+                join_eui[5],
+                join_eui[6],
+                join_eui[7]
             );
         }
         Err(e) => {
@@ -182,7 +190,10 @@ async fn main(_spawner: Spawner) {
             info!("  Interrupt active: {}", status.stat1.is_interrupt_active);
             info!("  Chip mode: {:?}", status.stat2.chip_mode);
             info!("  Reset status: {:?}", status.stat2.reset_status);
-            info!("  Running from flash: {}", status.stat2.is_running_from_flash);
+            info!(
+                "  Running from flash: {}",
+                status.stat2.is_running_from_flash
+            );
             info!("  IRQ status: 0x{:08X}", status.irq_status);
         }
         Err(e) => {
@@ -198,7 +209,10 @@ async fn main(_spawner: Spawner) {
             let temp_c = convert_temp_to_celsius(temp_raw);
             let temp_int = temp_c as i16;
             let temp_frac = ((temp_c - temp_int as f32) * 10.0) as u8;
-            info!("  Temperature: {}.{}°C (raw: 0x{:04X})", temp_int, temp_frac, temp_raw);
+            info!(
+                "  Temperature: {}.{}°C (raw: 0x{:04X})",
+                temp_int, temp_frac, temp_raw
+            );
         }
         Err(e) => {
             error!("  Failed to read temperature: {:?}", e);
@@ -211,7 +225,10 @@ async fn main(_spawner: Spawner) {
             let vbat_v = convert_vbat_to_volts(vbat_raw);
             let vbat_int = vbat_v as u16;
             let vbat_frac = ((vbat_v - vbat_int as f32) * 100.0) as u8;
-            info!("  Battery voltage: {}.{:02}V (raw: 0x{:02X})", vbat_int, vbat_frac, vbat_raw);
+            info!(
+                "  Battery voltage: {}.{:02}V (raw: 0x{:02X})",
+                vbat_int, vbat_frac, vbat_raw
+            );
         }
         Err(e) => {
             error!("  Failed to read battery voltage: {:?}", e);
@@ -227,7 +244,7 @@ async fn main(_spawner: Spawner) {
     info!("  Configuring radio in RX mode for better entropy...");
     // Set packet type to LoRa
     let _ = radio.set_packet_type(0x01).await; // 0x01 = LoRa
-    // Set a frequency (915 MHz for example)
+                                               // Set a frequency (915 MHz for example)
     let _ = radio.set_rf_frequency(915_000_000).await;
     // Enable continuous RX mode
     let _ = radio.set_rx(0xFFFFFF).await; // Continuous RX
@@ -237,7 +254,12 @@ async fn main(_spawner: Spawner) {
     for i in 0..5 {
         match radio.get_random_number().await {
             Ok(random) => {
-                info!("    Random #{}: 0x{:08X} (decimal: {})", i + 1, random, random);
+                info!(
+                    "    Random #{}: 0x{:08X} (decimal: {})",
+                    i + 1,
+                    random,
+                    random
+                );
             }
             Err(e) => {
                 error!("    Failed to generate random number: {:?}", e);

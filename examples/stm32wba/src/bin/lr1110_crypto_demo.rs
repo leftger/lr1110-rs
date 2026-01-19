@@ -26,18 +26,20 @@ use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
-    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
+    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk,
+    VoltageScale,
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::crypto::{
-    CryptoExt, CryptoElement, CryptoKeyId, CryptoStatus, CRYPTO_KEY_LENGTH, CRYPTO_MIC_LENGTH, CRYPTO_NONCE_LENGTH,
+    CryptoElement, CryptoExt, CryptoKeyId, CryptoStatus, CRYPTO_KEY_LENGTH, CRYPTO_MIC_LENGTH,
+    CRYPTO_NONCE_LENGTH,
 };
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use lr1110_rs::system::SystemExt;
@@ -166,7 +168,8 @@ async fn main(_spawner: Spawner) {
     // Example AES-128 key (16 bytes)
     // In production, use a securely generated key!
     let test_key: [u8; CRYPTO_KEY_LENGTH] = [
-        0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C,
+        0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F,
+        0x3C,
     ];
 
     // Set key in Gp0 slot for AES encryption/decryption
@@ -186,7 +189,10 @@ async fn main(_spawner: Spawner) {
     // (CMAC/MIC computation typically uses session integrity keys)
     info!("Setting AES key in FNwkSIntKey slot (for CMAC)...");
 
-    match radio.crypto_set_key(CryptoKeyId::FNwkSIntKey, &test_key).await {
+    match radio
+        .crypto_set_key(CryptoKeyId::FNwkSIntKey, &test_key)
+        .await
+    {
         Ok(status) => {
             info!("  Set key status: {:?}", status);
         }
@@ -204,7 +210,8 @@ async fn main(_spawner: Spawner) {
 
     // Plaintext must be multiple of 16 bytes for AES
     let plaintext: [u8; 16] = [
-        0x32, 0x43, 0xF6, 0xA8, 0x88, 0x5A, 0x30, 0x8D, 0x31, 0x31, 0x98, 0xA2, 0xE0, 0x37, 0x07, 0x34,
+        0x32, 0x43, 0xF6, 0xA8, 0x88, 0x5A, 0x30, 0x8D, 0x31, 0x31, 0x98, 0xA2, 0xE0, 0x37, 0x07,
+        0x34,
     ];
     let mut ciphertext = [0u8; 16];
 
@@ -278,7 +285,10 @@ async fn main(_spawner: Spawner) {
 
     let mut mic: [u8; CRYPTO_MIC_LENGTH] = [0u8; CRYPTO_MIC_LENGTH];
 
-    match radio.crypto_compute_aes_cmac(CryptoKeyId::FNwkSIntKey, &message).await {
+    match radio
+        .crypto_compute_aes_cmac(CryptoKeyId::FNwkSIntKey, &message)
+        .await
+    {
         Ok((status, computed_mic)) => {
             info!("  CMAC status: {:?}", status);
             if status == CryptoStatus::Success {
@@ -362,7 +372,8 @@ async fn main(_spawner: Spawner) {
 
     // Nonce for key derivation (16 bytes)
     let nonce: [u8; CRYPTO_NONCE_LENGTH] = [
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+        0x0F,
     ];
 
     info!("Deriving new key from GpKeKey0 -> GpKeKey1 with nonce...");

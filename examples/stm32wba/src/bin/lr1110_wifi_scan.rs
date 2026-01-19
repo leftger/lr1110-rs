@@ -24,19 +24,26 @@ use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
-    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
+    AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk,
+    VoltageScale,
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::iv::Lr1110InterfaceVariant;
-use lr1110_rs::wifi::{WifiExt, WIFI_ALL_CHANNELS_MASK, WIFI_MAX_RESULTS, WifiBasicMacTypeChannelResult, WifiScanMode, WifiSignalTypeScan};
-use lr1110_rs::system::{SystemExt, StandbyConfig, RfSwitchConfig, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH, convert_temp_to_celsius, convert_vbat_to_volts};
+use lr1110_rs::system::{
+    convert_temp_to_celsius, convert_vbat_to_volts, RfSwitchConfig, StandbyConfig, SystemExt,
+    RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH,
+};
+use lr1110_rs::wifi::{
+    WifiBasicMacTypeChannelResult, WifiExt, WifiScanMode, WifiSignalTypeScan,
+    WIFI_ALL_CHANNELS_MASK, WIFI_MAX_RESULTS,
+};
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -145,7 +152,10 @@ async fn main(_spawner: Spawner) {
             let temp_c = convert_temp_to_celsius(temp_raw);
             let temp_int = temp_c as i16;
             let temp_frac = ((temp_c - temp_int as f32) * 10.0) as u8;
-            info!("  Temperature: {}.{}°C (raw: 0x{:04X})", temp_int, temp_frac, temp_raw);
+            info!(
+                "  Temperature: {}.{}°C (raw: 0x{:04X})",
+                temp_int, temp_frac, temp_raw
+            );
         }
         Err(e) => {
             warn!("  Failed to read temperature: {:?}", e);
@@ -157,7 +167,10 @@ async fn main(_spawner: Spawner) {
             let vbat_v = convert_vbat_to_volts(vbat_raw);
             let vbat_int = vbat_v as u16;
             let vbat_frac = ((vbat_v - vbat_int as f32) * 100.0) as u8;
-            info!("  Battery voltage: {}.{:02}V (raw: 0x{:02X})", vbat_int, vbat_frac, vbat_raw);
+            info!(
+                "  Battery voltage: {}.{:02}V (raw: 0x{:02X})",
+                vbat_int, vbat_frac, vbat_raw
+            );
         }
         Err(e) => {
             warn!("  Failed to read battery voltage: {:?}", e);
@@ -196,16 +209,18 @@ async fn main(_spawner: Spawner) {
     // - RFSW3 (DIO8): WiFi LNA enable (BGA524N6)
     info!("Configuring RF switches for WiFi LNA...");
     let rf_switch_cfg = RfSwitchConfig {
-        enable: 0xFF,                    // Enable all switches
-        standby: 0x00,                   // Standby: no switches active
-        rx: RFSW0_HIGH,                  // RX: RFSW0 (DIO5)
-        tx: RFSW0_HIGH | RFSW1_HIGH,     // TX: RFSW0 + RFSW1
-        tx_hp: RFSW1_HIGH,               // TX HP: RFSW1 (DIO6)
-        tx_hf: 0x00,                     // TX HF: none
-        gnss: RFSW2_HIGH,                // GNSS: RFSW2 (DIO7) - BGA524N6 LNA
-        wifi: RFSW3_HIGH,                // WiFi: RFSW3 (DIO8) - BGA524N6 LNA
+        enable: 0xFF,                // Enable all switches
+        standby: 0x00,               // Standby: no switches active
+        rx: RFSW0_HIGH,              // RX: RFSW0 (DIO5)
+        tx: RFSW0_HIGH | RFSW1_HIGH, // TX: RFSW0 + RFSW1
+        tx_hp: RFSW1_HIGH,           // TX HP: RFSW1 (DIO6)
+        tx_hf: 0x00,                 // TX HF: none
+        gnss: RFSW2_HIGH,            // GNSS: RFSW2 (DIO7) - BGA524N6 LNA
+        wifi: RFSW3_HIGH,            // WiFi: RFSW3 (DIO8) - BGA524N6 LNA
     };
-    SystemExt::set_dio_as_rf_switch(&mut radio, &rf_switch_cfg).await.unwrap();
+    SystemExt::set_dio_as_rf_switch(&mut radio, &rf_switch_cfg)
+        .await
+        .unwrap();
 
     // Read WiFi firmware version
     info!("-------------------------------------------");
@@ -291,7 +306,11 @@ async fn main(_spawner: Spawner) {
         // Read results
         let mut results = [WifiBasicMacTypeChannelResult::default(); WIFI_MAX_RESULTS];
         let read_count = match radio
-            .wifi_read_basic_mac_type_channel_results(&mut results, 0, nb_results.min(WIFI_MAX_RESULTS as u8))
+            .wifi_read_basic_mac_type_channel_results(
+                &mut results,
+                0,
+                nb_results.min(WIFI_MAX_RESULTS as u8),
+            )
             .await
         {
             Ok(count) => count,
@@ -310,7 +329,11 @@ async fn main(_spawner: Spawner) {
             let channel = result.channel();
             let rssi = result.rssi;
             let signal_type = result.signal_type();
-            let rssi_valid = if result.rssi_valid() { "" } else { " (invalid)" };
+            let rssi_valid = if result.rssi_valid() {
+                ""
+            } else {
+                " (invalid)"
+            };
 
             info!(
                 "    AP {}: MAC={:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} Ch={:?} RSSI={}dBm{} Type={:?}",
