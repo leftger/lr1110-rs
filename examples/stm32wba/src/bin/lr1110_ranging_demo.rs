@@ -107,6 +107,7 @@ use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_params::Bandwidth;
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::iv::Lr1110InterfaceVariant;
+use lr1110_rs::radio::RadioControlExt;
 use lr1110_rs::ranging::{
     ranging_channels, ranging_config, lora_bw, lora_sf, lora_cr, packet_type,
     calculate_ranging_request_delay_ms, RangingExt,
@@ -438,114 +439,243 @@ async fn main(_spawner: Spawner) {
     info!("  Channels: {}", RANGING_CHANNELS.len());
     info!("==============================================");
 
-    // TODO: Implement ranging state machine
-    //
-    // The full implementation requires:
-    // 1. LoRa initialization phase (exchange addresses)
-    // 2. RTToF ranging phase (frequency hopping)
-    // 3. Result collection and processing
-    //
-    // Example state machine flow:
-    //
-    // loop {
-    //     match session.state {
-    //         RangingState::Idle => {
-    //             // Initialize ranging session
-    //             session.state = RangingState::LoRaInit;
-    //         }
-    //         RangingState::LoRaInit => {
-    //             // Phase 1: LoRa initialization
-    //             if IS_MANAGER {
-    //                 // Manager: TX address packet
-    //                 // radio.set_packet_type(packet_type::LORA).await?;
-    //                 // radio.set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, 0).await?;
-    //                 // radio.write_tx_buffer(0, &address_payload).await?;
-    //                 // radio.set_tx_mode(timeout).await?;
-    //                 // session.state = RangingState::LoRaWaitTx;
-    //             } else {
-    //                 // Subordinate: RX and respond
-    //                 // radio.set_packet_type(packet_type::LORA).await?;
-    //                 // radio.set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, 0).await?;
-    //                 // radio.set_rx_mode(ranging_config::RX_CONTINUOUS).await?;
-    //                 // session.state = RangingState::LoRaWaitRx;
-    //             }
-    //         }
-    //         RangingState::RangingStart => {
-    //             // Phase 2: RTToF ranging with frequency hopping
-    //             // for each channel in RANGING_CHANNELS {
-    //             //     radio.set_packet_type(packet_type::RTTOF).await?;
-    //             //     radio.set_rf_frequency(channel).await?;
-    //             //     radio.rttof_set_address(RANGING_ADDRESS, 4).await?;
-    //             //     radio.rttof_set_parameters(ranging_config::RESPONSE_SYMBOLS_COUNT).await?;
-    //             //
-    //             //     if IS_MANAGER {
-    //             //         radio.set_tx_mode(timeout).await?;
-    //             //         // Wait for ranging done IRQ
-    //             //         let result = radio.rttof_get_distance_result(Bandwidth::_500KHz).await?;
-    //             //         session.results[channel_index] = RangingResult {
-    //             //             frequency: channel,
-    //             //             distance_m: result.distance_m,
-    //             //             rssi: result.rssi_dbm,
-    //             //             valid: true,
-    //             //             ..Default::default()
-    //             //         };
-    //             //     } else {
-    //             //         radio.set_rx_mode(timeout).await?;
-    //             //         // Wait for ranging request and respond
-    //             //     }
-    //             //
-    //             //     Timer::after_millis(ranging_config::DONE_PROCESSING_TIME_MS as u64).await;
-    //             // }
-    //             // session.state = RangingState::Complete;
-    //         }
-    //         RangingState::Complete => {
-    //             // Output results
-    //             session.output_results();
-    //             Timer::after_secs(5).await;
-    //             session.reset();
-    //         }
-    //         _ => {
-    //             Timer::after_millis(10).await;
-    //         }
-    //     }
-    // }
+    // Set up ranging parameters
+    radio.rttof_set_address(RANGING_ADDRESS, ranging_config::SUBORDINATE_CHECK_LENGTH_BYTES).await.unwrap();
+    radio.rttof_set_request_address(RANGING_ADDRESS).await.unwrap();
+    radio.rttof_set_parameters(ranging_config::RESPONSE_SYMBOLS_COUNT).await.unwrap();
 
-    warn!("Ranging demo skeleton - full implementation requires completed RangingExt trait");
-    warn!("See src/ranging.rs for trait definition and examples/README.md for status");
+    // Configure LoRa sync word
+    radio.set_lora_sync_word(ranging_config::LORA_SYNC_WORD).await.unwrap();
 
-    // For now, just output a sample result structure
-    session.result_count = 3;
-    session.results[0] = RangingResult {
-        frequency: RANGING_CHANNELS[0],
-        distance_m: 100,
-        rssi: -85,
-        valid: true,
-        ..Default::default()
-    };
-    session.results[1] = RangingResult {
-        frequency: RANGING_CHANNELS[1],
-        distance_m: 105,
-        rssi: -87,
-        valid: true,
-        ..Default::default()
-    };
-    session.results[2] = RangingResult {
-        frequency: RANGING_CHANNELS[2],
-        distance_m: 102,
-        rssi: -86,
-        valid: true,
-        ..Default::default()
-    };
+    // Start with idle state
+    session.state = RangingState::Idle;
 
-    Timer::after_secs(2).await;
-    info!("\nSample output format:");
-    session.output_results();
-
-    info!("\n==============================================");
-    info!("Demo complete - see implementation notes above");
-    info!("==============================================");
-
+    // Main ranging loop
     loop {
-        Timer::after_secs(10).await;
+        match session.state {
+            RangingState::Idle => {
+                info!("Starting new ranging session...");
+                session.reset();
+                session.state = RangingState::LoRaInit;
+                Timer::after_millis(100).await;
+            }
+
+            RangingState::LoRaInit => {
+                info!("Phase 1: LoRa initialization");
+
+                // Configure LoRa packet type
+                radio.set_packet_type(packet_type::LORA).await.unwrap();
+                radio.set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, 0).await.unwrap();
+                radio.set_lora_pkt_params(
+                    PREAMBLE_LENGTH,
+                    0, // Explicit header
+                    ranging_config::INIT_PAYLOAD_LENGTH as u8,
+                    1, // CRC on
+                    0, // IQ not inverted
+                ).await.unwrap();
+
+                if IS_MANAGER {
+                    info!("  Manager: Sending address packet");
+                    // Create address payload
+                    let mut payload = [0u8; ranging_config::INIT_PAYLOAD_LENGTH];
+                    payload[0] = (RANGING_ADDRESS >> 24) as u8;
+                    payload[1] = (RANGING_ADDRESS >> 16) as u8;
+                    payload[2] = (RANGING_ADDRESS >> 8) as u8;
+                    payload[3] = RANGING_ADDRESS as u8;
+                    payload[4] = LORA_SF;
+                    payload[5] = LORA_BW;
+
+                    radio.write_buffer(0, &payload).await.unwrap();
+                    radio.set_tx(5000).await.unwrap(); // 5 second timeout
+                    session.state = RangingState::LoRaWaitTx;
+                } else {
+                    info!("  Subordinate: Waiting for address packet");
+                    radio.set_rx(ranging_config::RX_CONTINUOUS).await.unwrap();
+                    session.state = RangingState::LoRaWaitRx;
+                }
+            }
+
+            RangingState::LoRaWaitTx => {
+                // Wait for TX done (simplified - in real implementation would wait for IRQ)
+                Timer::after_millis(200).await;
+
+                // Read packet status to get RSSI
+                match radio.get_lora_pkt_status().await {
+                    Ok((rssi, _snr)) => {
+                        session.manager_rssi = rssi as i8;
+                        info!("  TX complete, RSSI: {} dBm", rssi);
+                    }
+                    Err(_) => {
+                        warn!("  Failed to read packet status");
+                    }
+                }
+
+                info!("Phase 2: Starting RTToF ranging");
+                session.state = RangingState::RangingStart;
+                session.channel_index = 0;
+            }
+
+            RangingState::LoRaWaitRx => {
+                // Wait for RX done (simplified - in real implementation would wait for IRQ)
+                Timer::after_millis(500).await;
+
+                // Try to read received data
+                let mut rx_buffer = [0u8; ranging_config::INIT_PAYLOAD_LENGTH];
+                match radio.read_buffer(0, ranging_config::INIT_PAYLOAD_LENGTH as u8, &mut rx_buffer).await {
+                    Ok(_) => {
+                        // Parse received address
+                        let received_addr = ((rx_buffer[0] as u32) << 24)
+                            | ((rx_buffer[1] as u32) << 16)
+                            | ((rx_buffer[2] as u32) << 8)
+                            | (rx_buffer[3] as u32);
+
+                        if received_addr == RANGING_ADDRESS {
+                            info!("  RX complete, address matched: 0x{:08X}", received_addr);
+
+                            // Read RSSI
+                            match radio.get_lora_pkt_status().await {
+                                Ok((rssi, _snr)) => {
+                                    session.subordinate_rssi = rssi as i8;
+                                    info!("  RSSI: {} dBm", rssi);
+                                }
+                                Err(_) => {}
+                            }
+
+                            info!("Phase 2: Starting RTToF ranging");
+                            session.state = RangingState::RangingStart;
+                            session.channel_index = 0;
+                        } else {
+                            warn!("  Address mismatch, retrying...");
+                            session.state = RangingState::LoRaInit;
+                        }
+                    }
+                    Err(_) => {
+                        warn!("  RX timeout, retrying...");
+                        session.state = RangingState::LoRaInit;
+                    }
+                }
+            }
+
+            RangingState::RangingStart => {
+                if session.channel_index < RANGING_CHANNELS.len() {
+                    let channel_freq = RANGING_CHANNELS[session.channel_index];
+                    info!("  Channel {}/{}: {} Hz",
+                        session.channel_index + 1,
+                        RANGING_CHANNELS.len(),
+                        channel_freq
+                    );
+
+                    // Configure for RTToF
+                    radio.set_packet_type(packet_type::RTTOF).await.unwrap();
+                    radio.set_rf_frequency(channel_freq).await.unwrap();
+
+                    // Calculate timeout for ranging request
+                    let bandwidth = match LORA_BW {
+                        lora_bw::BW_125 => Bandwidth::_125KHz,
+                        lora_bw::BW_250 => Bandwidth::_250KHz,
+                        lora_bw::BW_500 => Bandwidth::_500KHz,
+                        _ => Bandwidth::_500KHz,
+                    };
+
+                    let timeout_ms = calculate_ranging_request_delay_ms(
+                        LORA_BW,
+                        LORA_SF,
+                        PREAMBLE_LENGTH,
+                        ranging_config::RESPONSE_SYMBOLS_COUNT,
+                    );
+
+                    if IS_MANAGER {
+                        // Manager initiates ranging
+                        radio.set_tx(timeout_ms).await.unwrap();
+                        session.state = RangingState::RangingWaitDone;
+                    } else {
+                        // Subordinate waits for ranging request
+                        radio.set_rx(timeout_ms).await.unwrap();
+                        session.state = RangingState::RangingWaitDone;
+                    }
+                } else {
+                    // All channels complete
+                    info!("Ranging complete across {} channels", session.result_count);
+                    session.state = RangingState::Complete;
+                }
+            }
+
+            RangingState::RangingWaitDone => {
+                // Wait for ranging to complete (simplified - in real implementation would wait for IRQ)
+                Timer::after_millis(100).await;
+
+                if IS_MANAGER {
+                    // Read ranging result
+                    let bandwidth = match LORA_BW {
+                        lora_bw::BW_125 => Bandwidth::_125KHz,
+                        lora_bw::BW_250 => Bandwidth::_250KHz,
+                        lora_bw::BW_500 => Bandwidth::_500KHz,
+                        _ => Bandwidth::_500KHz,
+                    };
+
+                    match radio.rttof_get_distance_result(bandwidth).await {
+                        Ok(result) => {
+                            session.results[session.result_count] = RangingResult {
+                                frequency: RANGING_CHANNELS[session.channel_index],
+                                distance_m: result.distance_m,
+                                raw_distance: 0, // Not used
+                                rssi: result.rssi_dbm,
+                                valid: result.distance_m > 0,
+                            };
+                            session.result_count += 1;
+
+                            info!("    Distance: {} m, RSSI: {} dBm",
+                                result.distance_m,
+                                result.rssi_dbm
+                            );
+                        }
+                        Err(e) => {
+                            warn!("    Ranging failed: {:?}", e);
+                            session.results[session.result_count] = RangingResult {
+                                frequency: RANGING_CHANNELS[session.channel_index],
+                                distance_m: 0,
+                                raw_distance: 0,
+                                rssi: 0,
+                                valid: false,
+                            };
+                            session.result_count += 1;
+                        }
+                    }
+                } else {
+                    // Subordinate just waits
+                    info!("    Response sent");
+                    session.result_count += 1;
+                }
+
+                // Move to next channel
+                session.channel_index += 1;
+                session.state = RangingState::NextChannel;
+            }
+
+            RangingState::NextChannel => {
+                // Small delay between channels
+                Timer::after_millis(ranging_config::DONE_PROCESSING_TIME_MS as u64).await;
+                session.state = RangingState::RangingStart;
+            }
+
+            RangingState::Complete => {
+                info!("\n==============================================");
+                info!("Ranging Session Complete");
+                info!("==============================================");
+
+                if IS_MANAGER {
+                    session.output_results();
+                } else {
+                    info!("Subordinate completed {} ranging requests", session.result_count);
+                }
+
+                info!("\nWaiting 10 seconds before next session...");
+                Timer::after_secs(10).await;
+                session.state = RangingState::Idle;
+            }
+        }
+
+        // Small delay between state transitions
+        Timer::after_millis(10).await;
     }
 }

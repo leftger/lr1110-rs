@@ -338,6 +338,29 @@ pub fn calculate_ranging_request_delay_ms(bw: u8, sf: u8, preamble_len: u16, res
 // =============================================================================
 
 /// Extension trait that adds RTToF ranging functionality to the LR1110 radio.
+///
+/// # Note
+/// This trait provides only RTToF-specific methods. For general radio control
+/// functions like setting frequency, packet type, TX/RX modes, etc., use the
+/// `RadioControlExt` trait from the `radio` module.
+///
+/// # Example
+/// ```ignore
+/// use lr1110_rs::ranging::RangingExt;
+/// use lr1110_rs::radio::RadioControlExt;
+///
+/// // Configure RTToF parameters
+/// radio.rttof_set_address(0x12345678, 4).await?;
+/// radio.rttof_set_parameters(15).await?;
+///
+/// // Use radio control methods for frequency hopping
+/// radio.set_packet_type(packet_type::RTTOF).await?;
+/// radio.set_rf_frequency(915000000).await?;
+/// radio.set_tx(5000).await?;
+///
+/// // Read ranging result
+/// let result = radio.rttof_get_distance_result(Bandwidth::_500KHz).await?;
+/// ```
 #[allow(async_fn_in_trait)]
 pub trait RangingExt {
     /// Set the RTToF address for this subordinate device
@@ -376,52 +399,84 @@ pub trait RangingExt {
     /// Convenience function that retrieves both distance and RSSI results
     /// and converts them to meaningful units.
     async fn rttof_get_distance_result(&mut self, bandwidth: Bandwidth) -> Result<RttofDistanceResult, RadioError>;
-
-    /// Set the packet type (LoRa, RTToF, etc.)
-    async fn set_packet_type(&mut self, packet_type: u8) -> Result<(), RadioError>;
-
-    /// Set the RF frequency
-    async fn set_rf_frequency(&mut self, frequency_hz: u32) -> Result<(), RadioError>;
-
-    /// Set DIO IRQ parameters with custom mask
-    async fn set_dio_irq_params_custom(&mut self, irq_mask: u32) -> Result<(), RadioError>;
-
-    /// Start transmission (for RTToF ranging)
-    async fn set_tx_mode(&mut self, timeout_rtc_steps: u32) -> Result<(), RadioError>;
-
-    /// Start reception (for RTToF ranging)
-    async fn set_rx_mode(&mut self, timeout_rtc_steps: u32) -> Result<(), RadioError>;
-
-    /// Set LoRa modulation parameters
-    async fn set_lora_mod_params(&mut self, sf: u8, bw: u8, cr: u8, ldro: u8) -> Result<(), RadioError>;
-
-    /// Set LoRa packet parameters
-    async fn set_lora_pkt_params(
-        &mut self,
-        preamble_len: u16,
-        header_type: u8,
-        payload_len: u8,
-        crc_on: u8,
-        iq_inverted: u8,
-    ) -> Result<(), RadioError>;
-
-    /// Set LoRa sync word
-    async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError>;
-
-    /// Write data to TX buffer
-    async fn write_tx_buffer(&mut self, offset: u8, data: &[u8]) -> Result<(), RadioError>;
-
-    /// Read data from RX buffer
-    async fn read_rx_buffer(&mut self, offset: u8, length: u8, buffer: &mut [u8]) -> Result<(), RadioError>;
-
-    /// Get RX buffer status
-    async fn get_rx_buffer_status(&mut self) -> Result<(u8, u8), RadioError>;
-
-    /// Get LoRa packet status (RSSI and SNR)
-    async fn get_lora_packet_status(&mut self) -> Result<(i16, i8), RadioError>;
 }
 
-// NOTE: Implementation requires lora-phy to expose low-level SPI interface.
-// This will be implemented once lora-phy adds the Lr1110Interface trait.
-//
-// For now, users can use the types defined above with their own implementation.
+// =============================================================================
+// RangingExt trait implementation for Lr1110
+// =============================================================================
+
+impl<SPI, IV, C> RangingExt for lora_phy::lr1110::Lr1110<SPI, IV, C>
+where
+    SPI: embedded_hal_async::spi::SpiDevice<u8>,
+    IV: lora_phy::mod_traits::InterfaceVariant,
+    C: lora_phy::lr1110::variant::Lr1110Variant,
+{
+    async fn rttof_set_address(&mut self, address: u32, check_length: u8) -> Result<(), RadioError> {
+        let opcode = RttofOpCode::SetAddress.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (address >> 24) as u8,
+            (address >> 16) as u8,
+            (address >> 8) as u8,
+            address as u8,
+            check_length,
+        ];
+        self.execute_command(&cmd).await
+    }
+
+    async fn rttof_set_request_address(&mut self, request_address: u32) -> Result<(), RadioError> {
+        let opcode = RttofOpCode::SetRequestAddress.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (request_address >> 24) as u8,
+            (request_address >> 16) as u8,
+            (request_address >> 8) as u8,
+            request_address as u8,
+        ];
+        self.execute_command(&cmd).await
+    }
+
+    async fn rttof_set_rx_tx_delay_indicator(&mut self, delay_indicator: u32) -> Result<(), RadioError> {
+        let opcode = RttofOpCode::SetRxTxDelay.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (delay_indicator >> 24) as u8,
+            (delay_indicator >> 16) as u8,
+            (delay_indicator >> 8) as u8,
+            delay_indicator as u8,
+        ];
+        self.execute_command(&cmd).await
+    }
+
+    async fn rttof_set_parameters(&mut self, nb_symbols: u8) -> Result<(), RadioError> {
+        let opcode = RttofOpCode::SetParameters.bytes();
+        let cmd = [opcode[0], opcode[1], nb_symbols];
+        self.execute_command(&cmd).await
+    }
+
+    async fn rttof_get_raw_result(&mut self, result_type: RttofResultType) -> Result<RttofRawResult, RadioError> {
+        let opcode = RttofOpCode::GetResult.bytes();
+        let cmd = [opcode[0], opcode[1], result_type.value()];
+        let mut rbuffer = [0u8; RTTOF_RESULT_LENGTH];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer)
+    }
+
+    async fn rttof_get_distance_result(&mut self, bandwidth: Bandwidth) -> Result<RttofDistanceResult, RadioError> {
+        // Get distance result
+        let raw_distance = self.rttof_get_raw_result(RttofResultType::Raw).await?;
+        let distance_m = rttof_distance_raw_to_meters(bandwidth, &raw_distance);
+
+        // Get RSSI result
+        let raw_rssi = self.rttof_get_raw_result(RttofResultType::Rssi).await?;
+        let rssi_dbm = rttof_rssi_raw_to_dbm(&raw_rssi);
+
+        Ok(RttofDistanceResult {
+            distance_m,
+            rssi_dbm,
+        })
+    }
+}

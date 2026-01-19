@@ -62,6 +62,9 @@ pub mod iv;
 // Feature-gated modules
 // =============================================================================
 
+/// General radio control functions (packet type, frequency, TX/RX, buffers, etc.)
+pub mod radio;
+
 #[cfg(feature = "gnss")]
 pub mod gnss;
 
@@ -92,6 +95,8 @@ pub mod regmem;
 // =============================================================================
 // Re-export extension traits at crate root for convenience
 // =============================================================================
+
+pub use radio::RadioControlExt;
 
 #[cfg(feature = "gnss")]
 pub use gnss::GnssExt;
