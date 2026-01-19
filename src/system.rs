@@ -39,6 +39,7 @@ use lora_phy::mod_traits::InterfaceVariant;
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 enum SystemOpCode {
+    GetStatus = 0x0100,
     GetVersion = 0x0101,
     GetErrors = 0x010D,
     ClearErrors = 0x010E,
@@ -46,21 +47,25 @@ enum SystemOpCode {
     SetRegMode = 0x0110,
     CalibrateImage = 0x0111,
     SetDioAsRfSwitch = 0x0112,
+    SetDioIrqParams = 0x0113,
     ClearIrq = 0x0114,
-    GetIrqStatus = 0x0115,
     CfgLfClk = 0x0116,
     SetTcxoMode = 0x0117,
+    Reboot = 0x0118,
     GetVbat = 0x0119,
     GetTemp = 0x011A,
     SetSleep = 0x011B,
     SetStandby = 0x011C,
     SetFs = 0x011D,
     GetRandom = 0x0120,
+    EraseInfopage = 0x0121,
+    WriteInfopage = 0x0122,
+    ReadInfopage = 0x0123,
     ReadUid = 0x0125,
     ReadJoinEui = 0x0126,
-    EraseInfopage = 0x0127,
-    WriteInfopage = 0x0128,
-    ReadInfopage = 0x0129,
+    ReadPin = 0x0127,
+    EnableSpiCrc = 0x0128,
+    DriveDioInSleepMode = 0x012A,
 }
 
 impl SystemOpCode {
@@ -79,6 +84,9 @@ pub const LR11XX_SYSTEM_UID_LENGTH: usize = 8;
 
 /// Length of the LR11XX Join EUI in bytes
 pub const LR11XX_SYSTEM_JOIN_EUI_LENGTH: usize = 8;
+
+/// Length of the LR11XX PIN in bytes
+pub const LR11XX_SYSTEM_PIN_LENGTH: usize = 4;
 
 /// System error flags bitmask
 #[derive(Clone, Copy, Debug)]
@@ -138,6 +146,147 @@ impl SystemErrors {
 impl From<u16> for SystemErrors {
     fn from(raw: u16) -> Self {
         Self { raw }
+    }
+}
+
+// =============================================================================
+// Chip State Types
+// =============================================================================
+
+/// Chip operating modes
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum ChipMode {
+    /// Sleep mode
+    Sleep = 0x00,
+    /// Standby RC mode
+    StandbyRC = 0x01,
+    /// Standby XOSC mode
+    StandbyXOSC = 0x02,
+    /// Frequency synthesis mode
+    FS = 0x03,
+    /// Receive mode
+    RX = 0x04,
+    /// Transmit mode
+    TX = 0x05,
+    /// Localization mode (GNSS/WiFi scanning)
+    LOC = 0x06,
+}
+
+impl From<u8> for ChipMode {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => ChipMode::Sleep,
+            0x01 => ChipMode::StandbyRC,
+            0x02 => ChipMode::StandbyXOSC,
+            0x03 => ChipMode::FS,
+            0x04 => ChipMode::RX,
+            0x05 => ChipMode::TX,
+            0x06 => ChipMode::LOC,
+            _ => ChipMode::Sleep, // Default fallback
+        }
+    }
+}
+
+/// Reset status codes
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum ResetStatus {
+    /// Reset status cleared
+    Cleared = 0x00,
+    /// Analog reset
+    Analog = 0x01,
+    /// External reset (NRESET pin)
+    External = 0x02,
+    /// System reset
+    System = 0x03,
+    /// Watchdog reset
+    Watchdog = 0x04,
+    /// IOCD restart
+    IocdRestart = 0x05,
+    /// RTC restart
+    RtcRestart = 0x06,
+}
+
+impl From<u8> for ResetStatus {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => ResetStatus::Cleared,
+            0x01 => ResetStatus::Analog,
+            0x02 => ResetStatus::External,
+            0x03 => ResetStatus::System,
+            0x04 => ResetStatus::Watchdog,
+            0x05 => ResetStatus::IocdRestart,
+            0x06 => ResetStatus::RtcRestart,
+            _ => ResetStatus::Cleared,
+        }
+    }
+}
+
+/// Command execution status
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum CommandStatus {
+    /// Command failed
+    Fail = 0x00,
+    /// Peripheral error
+    PeripheralError = 0x01,
+    /// Command completed successfully
+    OK = 0x02,
+    /// Command completed, data available
+    Data = 0x03,
+}
+
+impl From<u8> for CommandStatus {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => CommandStatus::Fail,
+            0x01 => CommandStatus::PeripheralError,
+            0x02 => CommandStatus::OK,
+            0x03 => CommandStatus::Data,
+            _ => CommandStatus::Fail,
+        }
+    }
+}
+
+/// Status register 1
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct Stat1 {
+    /// Command execution status
+    pub command_status: CommandStatus,
+    /// Interrupt active flag
+    pub is_interrupt_active: bool,
+}
+
+impl From<u8> for Stat1 {
+    fn from(value: u8) -> Self {
+        Self {
+            command_status: CommandStatus::from((value >> 1) & 0x07),
+            is_interrupt_active: (value & 0x01) != 0,
+        }
+    }
+}
+
+/// Status register 2
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct Stat2 {
+    /// Reset status
+    pub reset_status: ResetStatus,
+    /// Current chip mode
+    pub chip_mode: ChipMode,
+    /// Running from flash flag
+    pub is_running_from_flash: bool,
+}
+
+impl From<u8> for Stat2 {
+    fn from(value: u8) -> Self {
+        Self {
+            reset_status: ResetStatus::from((value >> 4) & 0x0F),
+            chip_mode: ChipMode::from((value >> 1) & 0x07),
+            is_running_from_flash: (value & 0x01) != 0,
+        }
     }
 }
 
@@ -372,6 +521,43 @@ pub struct RfSwitchConfig {
 /// Extension trait that adds system diagnostic functionality to the LR1110 radio.
 #[allow(async_fn_in_trait)]
 pub trait SystemExt {
+    // Status and Control
+    /// Clear the reset status information in stat2
+    ///
+    /// Sends the GetStatus opcode to clear the reset status field.
+    async fn clear_reset_status_info(&mut self) -> Result<(), RadioError>;
+
+    /// Reboot the chip
+    ///
+    /// Performs a software reboot (warm start).
+    async fn reboot(&mut self, stay_in_bootloader: bool) -> Result<(), RadioError>;
+
+    /// Enable or disable SPI CRC checking
+    ///
+    /// # Arguments
+    /// * `enable` - true to enable SPI CRC, false to disable
+    async fn enable_spi_crc(&mut self, enable: bool) -> Result<(), RadioError>;
+
+    /// Configure DIO pins to be driven in sleep mode
+    ///
+    /// # Arguments
+    /// * `enable` - true to drive DIOs in sleep, false for high-impedance
+    async fn drive_dio_in_sleep_mode(&mut self, enable: bool) -> Result<(), RadioError>;
+
+    /// Read the 4-byte PIN from factory-programmed EUIs
+    async fn read_pin(&mut self) -> Result<[u8; LR11XX_SYSTEM_PIN_LENGTH], RadioError>;
+
+    /// Read the 4-byte PIN computed from custom EUIs
+    ///
+    /// # Arguments
+    /// * `chip_eui` - 8-byte chip EUI
+    /// * `join_eui` - 8-byte join EUI
+    async fn read_pin_custom_eui(
+        &mut self,
+        chip_eui: &[u8; LR11XX_SYSTEM_UID_LENGTH],
+        join_eui: &[u8; LR11XX_SYSTEM_JOIN_EUI_LENGTH],
+    ) -> Result<[u8; LR11XX_SYSTEM_PIN_LENGTH], RadioError>;
+
     /// Get the chip temperature in degrees Celsius
     ///
     /// Returns the raw temperature value from the internal sensor.
@@ -524,6 +710,56 @@ where
     IV: InterfaceVariant,
     C: Lr1110Variant,
 {
+    // Status and Control
+    async fn clear_reset_status_info(&mut self) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::GetStatus.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.execute_command(&cmd).await
+    }
+
+    async fn reboot(&mut self, stay_in_bootloader: bool) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::Reboot.bytes();
+        let cmd = [opcode[0], opcode[1], stay_in_bootloader as u8];
+        self.execute_command(&cmd).await
+    }
+
+    async fn enable_spi_crc(&mut self, enable: bool) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::EnableSpiCrc.bytes();
+        let cmd = [opcode[0], opcode[1], enable as u8];
+        self.execute_command(&cmd).await
+    }
+
+    async fn drive_dio_in_sleep_mode(&mut self, enable: bool) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::DriveDioInSleepMode.bytes();
+        let cmd = [opcode[0], opcode[1], enable as u8];
+        self.execute_command(&cmd).await
+    }
+
+    async fn read_pin(&mut self) -> Result<[u8; LR11XX_SYSTEM_PIN_LENGTH], RadioError> {
+        let opcode = SystemOpCode::ReadPin.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; LR11XX_SYSTEM_PIN_LENGTH];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer)
+    }
+
+    async fn read_pin_custom_eui(
+        &mut self,
+        chip_eui: &[u8; LR11XX_SYSTEM_UID_LENGTH],
+        join_eui: &[u8; LR11XX_SYSTEM_JOIN_EUI_LENGTH],
+    ) -> Result<[u8; LR11XX_SYSTEM_PIN_LENGTH], RadioError> {
+        let opcode = SystemOpCode::ReadPin.bytes();
+        let mut cmd = [0u8; 18]; // 2 + 8 + 8
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2..10].copy_from_slice(chip_eui);
+        cmd[10..18].copy_from_slice(join_eui);
+
+        let mut rbuffer = [0u8; LR11XX_SYSTEM_PIN_LENGTH];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer)
+    }
+
     async fn get_temp(&mut self) -> Result<u16, RadioError> {
         let opcode = SystemOpCode::GetTemp.bytes();
         let cmd = [opcode[0], opcode[1]];
@@ -681,15 +917,19 @@ where
     }
 
     async fn get_irq_status(&mut self) -> Result<IrqMask, RadioError> {
-        let opcode = SystemOpCode::GetIrqStatus.bytes();
+        // Note: In SWDR001, this uses direct_read to get 6 bytes (stat1, stat2, irq[4])
+        // Since we don't have direct_read in lora-phy, we use execute_command_with_response
+        // which achieves the same result via the GetStatus command
+        let opcode = SystemOpCode::GetStatus.bytes();
         let cmd = [opcode[0], opcode[1]];
-        let mut rbuffer = [0u8; 4];
+        let mut rbuffer = [0u8; 6]; // stat1, stat2, irq_status (4 bytes)
         self.execute_command_with_response(&cmd, &mut rbuffer).await?;
 
-        Ok(((rbuffer[0] as u32) << 24)
-            | ((rbuffer[1] as u32) << 16)
-            | ((rbuffer[2] as u32) << 8)
-            | (rbuffer[3] as u32))
+        // Extract IRQ status from bytes 2-5
+        Ok(((rbuffer[2] as u32) << 24)
+            | ((rbuffer[3] as u32) << 16)
+            | ((rbuffer[4] as u32) << 8)
+            | (rbuffer[5] as u32))
     }
 
     async fn get_and_clear_irq_status(&mut self) -> Result<IrqMask, RadioError> {

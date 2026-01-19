@@ -131,16 +131,41 @@ pub use regmem::RegMemExt;
 
 // Radio module types
 pub use radio::{
-    CadExitMode, CadParams, GfskAddressFiltering, GfskBandwidth, GfskCrcType, GfskDcFree,
-    GfskHeaderType, GfskModParams, GfskPktParams, GfskPreambleDetector, GfskPulseShape,
-    GfskStats, LoRaStats, PaConfig, PaRegSupply, PaSelection, RampTime,
+    // Packet types and modes
+    PacketType, FallbackMode, IntermediaryMode,
+    // PA and TX
+    PaConfig, PaRegSupply, PaSelection, RampTime,
+    // LoRa
+    LoRaNetworkType,
+    // GFSK
+    GfskAddressFiltering, GfskBandwidth, GfskCrcType, GfskDcFree, GfskHeaderType,
+    GfskModParams, GfskPktParams, GfskPreambleDetector, GfskPulseShape,
+    // BPSK
+    BpskModParams, BpskPktParams, BpskPulseShape,
+    // CAD
+    CadExitMode, CadParams,
+    // Statistics
+    GfskStats, LoRaStats,
+    // Packet Status
+    GfskPktStatus, LoRaPktStatus, RxBufferStatus,
+    // Calibration
+    RssiCalibrationTable,
+    // Timing utilities
+    convert_time_in_ms_to_rtc_step, convert_nb_symb_to_mant_exp,
+    get_lora_bw_in_hz, get_lora_time_on_air_numerator, get_lora_time_on_air_in_ms,
+    get_gfsk_time_on_air_numerator, get_gfsk_time_on_air_in_ms,
 };
 
 // System module types
 #[cfg(feature = "system")]
 pub use system::{
+    // Core types
     CalibrationParam, ChipType, IrqMask, RfSwitchConfig, SleepConfig, StandbyConfig, SystemErrors,
-    TcxoVoltage, Version, LR11XX_SYSTEM_JOIN_EUI_LENGTH, LR11XX_SYSTEM_UID_LENGTH,
+    TcxoVoltage, Version,
+    // Status types
+    ChipMode, ResetStatus, CommandStatus, Stat1, Stat2,
+    // Constants
+    LR11XX_SYSTEM_JOIN_EUI_LENGTH, LR11XX_SYSTEM_UID_LENGTH, LR11XX_SYSTEM_PIN_LENGTH,
     // Calibration constants
     CALIB_ADC_MASK, CALIB_ALL, CALIB_HF_RC_MASK, CALIB_IMG_MASK, CALIB_LF_RC_MASK,
     CALIB_PLL_MASK, CALIB_PLL_TX_MASK,
