@@ -73,6 +73,10 @@ pub enum GnssOpCode {
     GetSatellites = 0x0418,
     /// Read the almanac of given satellites (0x041A)
     ReadAlmanacPerSatellite = 0x041A,
+    /// Get the theoretical number of visible satellites (0x041F)
+    GetNbVisibleSatellites = 0x041F,
+    /// Get visible satellite IDs and Doppler information (0x0420)
+    GetVisibleSatellitesDoppler = 0x0420,
     /// Reset the internal time (0x0435)
     ResetTime = 0x0435,
     /// Reset the location and the history Doppler buffer (0x0437)
@@ -280,6 +284,19 @@ pub struct GnssDetectedSatellite {
     pub doppler: i16,
 }
 
+/// Visible satellite information (theoretical calculation)
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssVisibleSatellite {
+    /// Satellite ID
+    pub satellite_id: u8,
+    /// Doppler with 6ppm accuracy
+    pub doppler: i16,
+}
+
+/// GNSS date type (seconds since January 6, 1980, 00:00:00 with leap seconds)
+pub type GnssDate = u32;
+
 /// GNSS context status structure
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
@@ -350,6 +367,9 @@ pub trait GnssExt {
     /// Set the frequency search space
     async fn gnss_set_freq_search_space(&mut self, freq_search_space: GnssFreqSearchSpace) -> Result<(), RadioError>;
 
+    /// Read the current frequency search space configuration
+    async fn gnss_read_freq_search_space(&mut self) -> Result<GnssFreqSearchSpace, RadioError>;
+
     /// Reset the GNSS time
     async fn gnss_reset_time(&mut self) -> Result<(), RadioError>;
 
@@ -364,6 +384,33 @@ pub trait GnssExt {
 
     /// Read almanac data for a single satellite (convenience method)
     async fn gnss_read_almanac_per_satellite(&mut self, sv_id: u8) -> Result<[u8; GNSS_SINGLE_ALMANAC_READ_SIZE], RadioError>;
+
+    /// Get the theoretical number of visible satellites
+    ///
+    /// Calculates the number of satellites that should be visible based on:
+    /// - GPS date (seconds since January 6, 1980, 00:00:00 with leap seconds)
+    /// - Assistance position (latitude/longitude)
+    /// - Constellation mask (GPS, BeiDou, etc.)
+    ///
+    /// Must be called before `gnss_get_visible_satellites`.
+    async fn gnss_get_nb_visible_satellites(
+        &mut self,
+        date: GnssDate,
+        position: &GnssAssistancePosition,
+        constellation_mask: GnssConstellationMask,
+    ) -> Result<u8, RadioError>;
+
+    /// Get visible satellite IDs and Doppler information
+    ///
+    /// Returns satellite ID and Doppler for each visible satellite.
+    /// Must be called after `gnss_get_nb_visible_satellites`.
+    ///
+    /// # Arguments
+    /// * `satellites` - Buffer to store satellite info (length must match nb_visible from previous call)
+    async fn gnss_get_visible_satellites(
+        &mut self,
+        satellites: &mut [GnssVisibleSatellite],
+    ) -> Result<u8, RadioError>;
 }
 
 // =============================================================================
@@ -566,5 +613,75 @@ where
         let mut almanac = [0u8; GNSS_SINGLE_ALMANAC_READ_SIZE];
         self.gnss_read_almanac(sv_id, 1, &mut almanac).await?;
         Ok(almanac)
+    }
+
+    async fn gnss_read_freq_search_space(&mut self) -> Result<GnssFreqSearchSpace, RadioError> {
+        let opcode = GnssOpCode::ReadFreqSearchSpace.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(GnssFreqSearchSpace::from(rbuffer[0]))
+    }
+
+    async fn gnss_get_nb_visible_satellites(
+        &mut self,
+        date: GnssDate,
+        position: &GnssAssistancePosition,
+        constellation_mask: GnssConstellationMask,
+    ) -> Result<u8, RadioError> {
+        let opcode = GnssOpCode::GetNbVisibleSatellites.bytes();
+
+        // Pack date (4 bytes, big-endian)
+        let date_bytes = date.to_be_bytes();
+
+        // Pack position (latitude: 12 bits, longitude: 12 bits)
+        let latitude = ((position.latitude * 2048.0) / GNSS_SCALING_LATITUDE) as i16;
+        let longitude = ((position.longitude * 2048.0) / GNSS_SCALING_LONGITUDE) as i16;
+
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            date_bytes[0],
+            date_bytes[1],
+            date_bytes[2],
+            date_bytes[3],
+            (latitude >> 8) as u8,
+            (latitude & 0xFF) as u8,
+            (longitude >> 8) as u8,
+            (longitude & 0xFF) as u8,
+            constellation_mask,
+        ];
+
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer[0])
+    }
+
+    async fn gnss_get_visible_satellites(
+        &mut self,
+        satellites: &mut [GnssVisibleSatellite],
+    ) -> Result<u8, RadioError> {
+        let opcode = GnssOpCode::GetVisibleSatellitesDoppler.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        // Each satellite is 3 bytes: ID (1) + Doppler (2)
+        let result_size = satellites.len() * 3;
+        let mut rbuffer = [0u8; 255]; // Max buffer size
+
+        if result_size > rbuffer.len() {
+            return Err(RadioError::PayloadSizeMismatch(result_size, rbuffer.len()));
+        }
+
+        self.execute_command_with_response(&cmd, &mut rbuffer[..result_size]).await?;
+
+        // Parse results
+        let count = satellites.len().min(result_size / 3);
+        for (i, satellite) in satellites.iter_mut().enumerate().take(count) {
+            let offset = i * 3;
+            satellite.satellite_id = rbuffer[offset];
+            satellite.doppler = ((rbuffer[offset + 1] as i16) << 8) | (rbuffer[offset + 2] as i16);
+        }
+
+        Ok(count as u8)
     }
 }

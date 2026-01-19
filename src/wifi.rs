@@ -588,6 +588,14 @@ pub trait WifiExt {
 
     /// Configure the timestamp for AP phone scanning
     async fn wifi_cfg_timestamp_ap_phone(&mut self, timestamp_s: u32) -> Result<(), RadioError>;
+
+    /// Get the maximum number of WiFi results that can be fetched per chunk
+    ///
+    /// This returns a driver limitation value, not a chip capability.
+    /// Used to avoid allocating overly large temporary buffers.
+    fn wifi_get_nb_results_max_per_chunk() -> u8 {
+        WIFI_N_RESULTS_MAX_PER_CHUNK
+    }
 }
 
 // =============================================================================

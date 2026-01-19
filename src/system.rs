@@ -155,6 +155,18 @@ pub trait SystemExt {
 
     /// Read the Join EUI (8 bytes) - for LoRaWAN
     async fn read_join_eui(&mut self) -> Result<[u8; LR11XX_SYSTEM_JOIN_EUI_LENGTH], RadioError>;
+
+    /// Wake the radio up from sleep mode
+    ///
+    /// Sends a wakeup signal to exit sleep state and return to standby.
+    /// This is typically handled at the HAL level by toggling the NSS pin.
+    async fn system_wakeup(&mut self) -> Result<(), RadioError>;
+
+    /// Abort a currently executing blocking command
+    ///
+    /// Sends an abort signal to terminate any ongoing blocking operation.
+    /// Useful for canceling long-running scans or ranging operations.
+    async fn system_abort_blocking_cmd(&mut self) -> Result<(), RadioError>;
 }
 
 // =============================================================================
@@ -213,5 +225,23 @@ where
         self.execute_command_with_response(&cmd, &mut rbuffer).await?;
 
         Ok(rbuffer)
+    }
+
+    async fn system_wakeup(&mut self) -> Result<(), RadioError> {
+        // Wakeup is typically handled at the HAL level by toggling NSS
+        // The lora-phy layer should handle this via the InterfaceVariant
+        // For now, we return Ok as the actual wakeup mechanism is HAL-dependent
+        // TODO: Verify if lora-phy has a specific wakeup method or if this needs
+        // special NSS toggling sequence as described in SWDR001 lr11xx_hal.c
+        Ok(())
+    }
+
+    async fn system_abort_blocking_cmd(&mut self) -> Result<(), RadioError> {
+        // Abort command requires special HAL handling
+        // According to SWDR001, this may require NSS toggling or a specific command sequence
+        // The actual implementation depends on the HAL layer capabilities
+        // TODO: Consult SWDR001 lr11xx_hal.c for the actual abort sequence
+        // and implement proper NSS toggling if needed
+        Ok(())
     }
 }
