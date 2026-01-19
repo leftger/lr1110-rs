@@ -49,6 +49,7 @@ enum SystemOpCode {
     SetDioAsRfSwitch = 0x0112,
     SetDioIrqParams = 0x0113,
     ClearIrq = 0x0114,
+    GetIrqStatus = 0x0115,
     CfgLfClk = 0x0116,
     SetTcxoMode = 0x0117,
     Reboot = 0x0118,
@@ -927,20 +928,17 @@ where
     }
 
     async fn get_irq_status(&mut self) -> Result<IrqMask, RadioError> {
-        // Note: In SWDR001, this uses direct_read to get 6 bytes (stat1, stat2, irq[4])
-        // Since we don't have direct_read in lora-phy, we use execute_command_with_response
-        // which achieves the same result via the GetStatus command
-        let opcode = SystemOpCode::GetStatus.bytes();
+        // Use GetIrqStatus opcode (0x0115) - specific to lr1110-rs implementation
+        // Note: SWDR001 uses direct_read, but this opcode achieves the same result
+        let opcode = SystemOpCode::GetIrqStatus.bytes();
         let cmd = [opcode[0], opcode[1]];
-        let mut rbuffer = [0u8; 6]; // stat1, stat2, irq_status (4 bytes)
-        self.execute_command_with_response(&cmd, &mut rbuffer)
-            .await?;
+        let mut rbuffer = [0u8; 4];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
 
-        // Extract IRQ status from bytes 2-5
-        Ok(((rbuffer[2] as u32) << 24)
-            | ((rbuffer[3] as u32) << 16)
-            | ((rbuffer[4] as u32) << 8)
-            | (rbuffer[5] as u32))
+        Ok(((rbuffer[0] as u32) << 24)
+            | ((rbuffer[1] as u32) << 16)
+            | ((rbuffer[2] as u32) << 8)
+            | (rbuffer[3] as u32))
     }
 
     async fn get_and_clear_irq_status(&mut self) -> Result<IrqMask, RadioError> {
