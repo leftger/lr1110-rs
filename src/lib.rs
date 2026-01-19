@@ -311,6 +311,9 @@ pub use system::{
     SystemErrors,
     TcxoVoltage,
     Version,
+    // Helper functions
+    convert_temp_to_celsius,
+    convert_vbat_to_volts,
     // Calibration constants
     CALIB_ADC_MASK,
     CALIB_ALL,

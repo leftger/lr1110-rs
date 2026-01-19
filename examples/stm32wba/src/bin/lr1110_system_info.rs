@@ -35,9 +35,9 @@ use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
-use lr1110_rs::radio::RadioControlExt;
-use lr1110_rs::system::{SystemErrors, SystemExt};
 use lr1110_rs::iv::Lr1110InterfaceVariant;
+use lr1110_rs::radio::RadioControlExt;
+use lr1110_rs::system::{SystemErrors, SystemExt, convert_temp_to_celsius, convert_vbat_to_volts};
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -195,9 +195,10 @@ async fn main(_spawner: Spawner) {
     info!("Sensors:");
     match radio.get_temp().await {
         Ok(temp_raw) => {
-            // Temperature formula from datasheet
-            // The raw value needs conversion - this is approximate
-            info!("  Temperature (raw): {}", temp_raw);
+            let temp_c = convert_temp_to_celsius(temp_raw);
+            let temp_int = temp_c as i16;
+            let temp_frac = ((temp_c - temp_int as f32) * 10.0) as u8;
+            info!("  Temperature: {}.{}°C (raw: 0x{:04X})", temp_int, temp_frac, temp_raw);
         }
         Err(e) => {
             error!("  Failed to read temperature: {:?}", e);
@@ -207,7 +208,10 @@ async fn main(_spawner: Spawner) {
     // Read battery voltage
     match radio.get_vbat().await {
         Ok(vbat_raw) => {
-            info!("  Battery voltage (raw): {}", vbat_raw);
+            let vbat_v = convert_vbat_to_volts(vbat_raw);
+            let vbat_int = vbat_v as u16;
+            let vbat_frac = ((vbat_v - vbat_int as f32) * 100.0) as u8;
+            info!("  Battery voltage: {}.{:02}V (raw: 0x{:02X})", vbat_int, vbat_frac, vbat_raw);
         }
         Err(e) => {
             error!("  Failed to read battery voltage: {:?}", e);

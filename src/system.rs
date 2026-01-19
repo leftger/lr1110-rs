@@ -559,16 +559,32 @@ pub trait SystemExt {
         join_eui: &[u8; LR11XX_SYSTEM_JOIN_EUI_LENGTH],
     ) -> Result<[u8; LR11XX_SYSTEM_PIN_LENGTH], RadioError>;
 
-    /// Get the chip temperature in degrees Celsius
+    /// Get the chip temperature (raw ADC value)
     ///
-    /// Returns the raw temperature value from the internal sensor.
-    /// Temperature in Celsius = (raw_value - 273.15) approximately.
+    /// Returns the raw 16-bit temperature value from the internal sensor.
+    /// Use [`convert_temp_to_celsius()`] to convert to degrees Celsius.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let temp_raw = radio.get_temp().await?;
+    /// let temp_c = convert_temp_to_celsius(temp_raw);
+    /// info!("Temperature: {:.1}°C", temp_c);
+    /// ```
     async fn get_temp(&mut self) -> Result<u16, RadioError>;
 
-    /// Get the battery voltage
+    /// Get the battery voltage (raw ADC value)
     ///
-    /// Returns a raw ADC value representing battery voltage.
-    /// Actual voltage depends on board configuration.
+    /// Returns a raw 8-bit ADC value representing battery voltage.
+    /// Use [`convert_vbat_to_volts()`] to convert to actual voltage.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let vbat_raw = radio.get_vbat().await?;
+    /// let vbat_v = convert_vbat_to_volts(vbat_raw);
+    /// info!("Battery: {:.2}V", vbat_v);
+    /// ```
     async fn get_vbat(&mut self) -> Result<u8, RadioError>;
 
     /// Get a 32-bit random number from the hardware RNG
@@ -1021,4 +1037,120 @@ where
         ];
         self.execute_command_with_response(&cmd, data).await
     }
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/// Convert raw temperature value to degrees Celsius
+///
+/// The LR1110 temperature sensor returns a raw 16-bit ADC value that must be
+/// converted using the formula from the datasheet (Section 4.3):
+///
+/// ```text
+/// Temperature(°C) ≈ 25 + (1000 / -1.7mV/°C) × (Temp(10:0) / 2047 × 1.35V - 0.7295V)
+/// ```
+///
+/// Where:
+/// - `Temp(10:0)`: Lower 11 bits of the raw value
+/// - `2047`: Maximum value for 11 bits (2^11 - 1)
+/// - `1.35V`: Internal reference voltage (typical)
+/// - `0.7295V`: Offset voltage
+/// - `-1.7 mV/°C`: Temperature coefficient (typical)
+/// - `25°C`: Reference temperature
+///
+/// # Arguments
+///
+/// * `raw_value` - Raw 16-bit temperature value from [`get_temp()`](SystemExt::get_temp)
+///
+/// # Returns
+///
+/// Temperature in degrees Celsius as a floating point value
+///
+/// # Example
+///
+/// ```ignore
+/// use lr1110_rs::system::{SystemExt, convert_temp_to_celsius};
+///
+/// let temp_raw = radio.get_temp().await?;
+/// let temp_c = convert_temp_to_celsius(temp_raw);
+/// info!("Chip temperature: {:.1}°C", temp_c);
+/// ```
+///
+/// # Accuracy
+///
+/// Typical accuracy: ±3°C across -40°C to +85°C range
+pub fn convert_temp_to_celsius(raw_value: u16) -> f32 {
+    // Extract lower 11 bits (Temp(10:0))
+    let temp_11bit = (raw_value & 0x7FF) as f32;
+
+    // Constants from datasheet
+    const VREF: f32 = 1.35; // Internal reference voltage (V)
+    const V_OFFSET: f32 = 0.7295; // Offset voltage (V)
+    const TEMP_COEFF: f32 = -1.7; // Temperature coefficient (mV/°C)
+    const T_REF: f32 = 25.0; // Reference temperature (°C)
+    const ADC_MAX: f32 = 2047.0; // 11-bit ADC maximum (2^11 - 1)
+
+    // Convert ADC value to voltage
+    let voltage = (temp_11bit / ADC_MAX) * VREF;
+
+    // Apply temperature formula
+    // Temperature(°C) = 25 + (1000 / -1.7) × (voltage - 0.7295)
+    let temp_celsius = T_REF + (1000.0 / TEMP_COEFF) * (voltage - V_OFFSET);
+
+    temp_celsius
+}
+
+/// Convert raw battery voltage value to volts
+///
+/// The LR1110 battery voltage measurement returns an 8-bit ADC value that must be
+/// converted using the formula from the datasheet (Section 5.2):
+///
+/// ```text
+/// VBAT(V) = ((5 × VBat(7:0) / 255) - 1) × 1.35V
+/// ```
+///
+/// Where:
+/// - `VBat(7:0)`: Raw 8-bit ADC value
+/// - `255`: Maximum value for 8 bits (2^8 - 1)
+/// - `1.35V`: Internal reference voltage (typical)
+/// - Factor of 5: Voltage divider ratio
+///
+/// # Arguments
+///
+/// * `raw_value` - Raw 8-bit battery voltage value from [`get_vbat()`](SystemExt::get_vbat)
+///
+/// # Returns
+///
+/// Battery voltage in volts as a floating point value
+///
+/// # Example
+///
+/// ```ignore
+/// use lr1110_rs::system::{SystemExt, convert_vbat_to_volts};
+///
+/// let vbat_raw = radio.get_vbat().await?;
+/// let vbat_v = convert_vbat_to_volts(vbat_raw);
+/// info!("Battery voltage: {:.2}V", vbat_v);
+///
+/// if vbat_v < 2.0 {
+///     warn!("Low battery!");
+/// }
+/// ```
+///
+/// # Voltage Range
+///
+/// Typical range: 1.8V to 3.7V (depends on board power supply)
+pub fn convert_vbat_to_volts(raw_value: u8) -> f32 {
+    // Constants from datasheet
+    const VREF: f32 = 1.35; // Internal reference voltage (V)
+    const ADC_MAX: f32 = 255.0; // 8-bit ADC maximum (2^8 - 1)
+    const DIVIDER_RATIO: f32 = 5.0; // Voltage divider ratio
+
+    // Apply voltage formula
+    // VBAT(V) = ((5 × VBat(7:0) / 255) - 1) × 1.35
+    let vbat_volts = ((DIVIDER_RATIO * (raw_value as f32) / ADC_MAX) - 1.0) * VREF;
+
+    vbat_volts
 }

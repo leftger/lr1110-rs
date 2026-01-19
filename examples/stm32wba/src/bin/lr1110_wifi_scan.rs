@@ -36,7 +36,7 @@ use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use lr1110_rs::wifi::{WifiExt, WIFI_ALL_CHANNELS_MASK, WIFI_MAX_RESULTS, WifiBasicMacTypeChannelResult, WifiScanMode, WifiSignalTypeScan};
-use lr1110_rs::system::{SystemExt, StandbyConfig, RfSwitchConfig, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH};
+use lr1110_rs::system::{SystemExt, StandbyConfig, RfSwitchConfig, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH, convert_temp_to_celsius, convert_vbat_to_volts};
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -141,10 +141,11 @@ async fn main(_spawner: Spawner) {
 
     // Display system diagnostics
     match radio.get_temp().await {
-        Ok(temp) => {
-            // Convert raw value to Celsius (approximation)
-            let temp_c = (temp as i16) - 273;
-            info!("  Temperature: ~{}°C (raw: {})", temp_c, temp);
+        Ok(temp_raw) => {
+            let temp_c = convert_temp_to_celsius(temp_raw);
+            let temp_int = temp_c as i16;
+            let temp_frac = ((temp_c - temp_int as f32) * 10.0) as u8;
+            info!("  Temperature: {}.{}°C (raw: 0x{:04X})", temp_int, temp_frac, temp_raw);
         }
         Err(e) => {
             warn!("  Failed to read temperature: {:?}", e);
@@ -152,8 +153,11 @@ async fn main(_spawner: Spawner) {
     }
 
     match radio.get_vbat().await {
-        Ok(vbat) => {
-            info!("  Battery voltage (raw): {}", vbat);
+        Ok(vbat_raw) => {
+            let vbat_v = convert_vbat_to_volts(vbat_raw);
+            let vbat_int = vbat_v as u16;
+            let vbat_frac = ((vbat_v - vbat_int as f32) * 100.0) as u8;
+            info!("  Battery voltage: {}.{:02}V (raw: 0x{:02X})", vbat_int, vbat_frac, vbat_raw);
         }
         Err(e) => {
             warn!("  Failed to read battery voltage: {:?}", e);
