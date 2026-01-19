@@ -307,7 +307,11 @@ where
     async fn lr_fhss_init(&mut self) -> Result<(), RadioError> {
         // Step 1: Set packet type to LR-FHSS (0x04)
         let pkt_type_opcode = RadioOpCode::SetPktType.bytes();
-        let pkt_type_cmd = [pkt_type_opcode[0], pkt_type_opcode[1], PacketType::LrFhss.value()];
+        let pkt_type_cmd = [
+            pkt_type_opcode[0],
+            pkt_type_opcode[1],
+            PacketType::LrFhss.value(),
+        ];
         self.execute_command(&pkt_type_cmd).await?;
 
         // Step 2: Set LR-FHSS modulation parameters (bitrate 488 bps, BT=1 pulse shape)
@@ -335,7 +339,8 @@ where
         payload: &[u8],
     ) -> Result<(), RadioError> {
         // Set LR-FHSS sync word from params (matching SWDR001 behavior)
-        self.lr_fhss_set_sync_word(&params.lr_fhss_params.sync_word).await?;
+        self.lr_fhss_set_sync_word(&params.lr_fhss_params.sync_word)
+            .await?;
 
         // Build LR-FHSS frame command
         // Format per SWDR001: opcode[2] + header_count + cr + modulation_type + grid +

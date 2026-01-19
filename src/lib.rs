@@ -131,51 +131,114 @@ pub use regmem::RegMemExt;
 
 // Radio module types
 pub use radio::{
-    // Packet types and modes
-    PacketType, FallbackMode, IntermediaryMode,
-    // PA and TX
-    PaConfig, PaRegSupply, PaSelection, RampTime,
+    convert_nb_symb_to_mant_exp,
+    // Timing utilities
+    convert_time_in_ms_to_rtc_step,
+    get_gfsk_time_on_air_in_ms,
+    get_gfsk_time_on_air_numerator,
+    get_lora_bw_in_hz,
+    get_lora_time_on_air_in_ms,
+    get_lora_time_on_air_numerator,
+    // BPSK
+    BpskModParams,
+    BpskPktParams,
+    BpskPulseShape,
+    // CAD
+    CadExitMode,
+    CadParams,
+    FallbackMode,
+    // GFSK
+    GfskAddressFiltering,
+    GfskBandwidth,
+    GfskCrcType,
+    GfskDcFree,
+    GfskHeaderType,
+    GfskModParams,
+    GfskPktParams,
+    // Packet Status
+    GfskPktStatus,
+    GfskPreambleDetector,
+    GfskPulseShape,
+    // Statistics
+    GfskStats,
+    IntermediaryMode,
     // LoRa
     LoRaNetworkType,
-    // GFSK
-    GfskAddressFiltering, GfskBandwidth, GfskCrcType, GfskDcFree, GfskHeaderType,
-    GfskModParams, GfskPktParams, GfskPreambleDetector, GfskPulseShape,
-    // BPSK
-    BpskModParams, BpskPktParams, BpskPulseShape,
-    // CAD
-    CadExitMode, CadParams,
-    // Statistics
-    GfskStats, LoRaStats,
-    // Packet Status
-    GfskPktStatus, LoRaPktStatus, RxBufferStatus,
+    LoRaPktStatus,
+    LoRaStats,
+    // PA and TX
+    PaConfig,
+    PaRegSupply,
+    PaSelection,
+    // Packet types and modes
+    PacketType,
+    RampTime,
     // Calibration
     RssiCalibrationTable,
-    // Timing utilities
-    convert_time_in_ms_to_rtc_step, convert_nb_symb_to_mant_exp,
-    get_lora_bw_in_hz, get_lora_time_on_air_numerator, get_lora_time_on_air_in_ms,
-    get_gfsk_time_on_air_numerator, get_gfsk_time_on_air_in_ms,
+    RxBufferStatus,
 };
 
 // System module types
 #[cfg(feature = "system")]
 pub use system::{
     // Core types
-    CalibrationParam, ChipType, IrqMask, RfSwitchConfig, SleepConfig, StandbyConfig, SystemErrors,
-    TcxoVoltage, Version,
+    CalibrationParam,
     // Status types
-    ChipMode, ResetStatus, CommandStatus, Stat1, Stat2,
-    // Constants
-    LR11XX_SYSTEM_JOIN_EUI_LENGTH, LR11XX_SYSTEM_UID_LENGTH, LR11XX_SYSTEM_PIN_LENGTH,
+    ChipMode,
+    ChipType,
+    CommandStatus,
+    IrqMask,
+    ResetStatus,
+    RfSwitchConfig,
+    SleepConfig,
+    StandbyConfig,
+    Stat1,
+    Stat2,
+    SystemErrors,
+    TcxoVoltage,
+    Version,
     // Calibration constants
-    CALIB_ADC_MASK, CALIB_ALL, CALIB_HF_RC_MASK, CALIB_IMG_MASK, CALIB_LF_RC_MASK,
-    CALIB_PLL_MASK, CALIB_PLL_TX_MASK,
+    CALIB_ADC_MASK,
+    CALIB_ALL,
+    CALIB_HF_RC_MASK,
+    CALIB_IMG_MASK,
+    CALIB_LF_RC_MASK,
+    CALIB_PLL_MASK,
+    CALIB_PLL_TX_MASK,
     // IRQ constants
-    IRQ_ALL, IRQ_CAD_DETECTED, IRQ_CAD_DONE, IRQ_CMD_ERROR, IRQ_CRC_ERROR, IRQ_EOL, IRQ_ERROR,
-    IRQ_FSK_ADDR_ERROR, IRQ_FSK_LEN_ERROR, IRQ_GNSS_SCAN_DONE, IRQ_HEADER_ERROR,
-    IRQ_LORA_RX_TIMESTAMP, IRQ_LR_FHSS_INTRA_PKT_HOP, IRQ_NONE, IRQ_PREAMBLE_DETECTED,
-    IRQ_RANGING_EXCH_VALID, IRQ_RANGING_REQ_DISCARDED, IRQ_RANGING_REQ_VALID,
-    IRQ_RANGING_RESP_DONE, IRQ_RANGING_TIMEOUT, IRQ_RX_DONE, IRQ_SYNC_WORD_HEADER_VALID,
-    IRQ_TIMEOUT, IRQ_TX_DONE, IRQ_WIFI_SCAN_DONE,
+    IRQ_ALL,
+    IRQ_CAD_DETECTED,
+    IRQ_CAD_DONE,
+    IRQ_CMD_ERROR,
+    IRQ_CRC_ERROR,
+    IRQ_EOL,
+    IRQ_ERROR,
+    IRQ_FSK_ADDR_ERROR,
+    IRQ_FSK_LEN_ERROR,
+    IRQ_GNSS_SCAN_DONE,
+    IRQ_HEADER_ERROR,
+    IRQ_LORA_RX_TIMESTAMP,
+    IRQ_LR_FHSS_INTRA_PKT_HOP,
+    IRQ_NONE,
+    IRQ_PREAMBLE_DETECTED,
+    IRQ_RANGING_EXCH_VALID,
+    IRQ_RANGING_REQ_DISCARDED,
+    IRQ_RANGING_REQ_VALID,
+    IRQ_RANGING_RESP_DONE,
+    IRQ_RANGING_TIMEOUT,
+    IRQ_RX_DONE,
+    IRQ_SYNC_WORD_HEADER_VALID,
+    IRQ_TIMEOUT,
+    IRQ_TX_DONE,
+    IRQ_WIFI_SCAN_DONE,
+    // Constants
+    LR11XX_SYSTEM_JOIN_EUI_LENGTH,
+    LR11XX_SYSTEM_PIN_LENGTH,
+    LR11XX_SYSTEM_UID_LENGTH,
     // RF switch constants
-    RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH, RFSW4_HIGH,
+    RFSW0_HIGH,
+    RFSW1_HIGH,
+    RFSW2_HIGH,
+    RFSW3_HIGH,
+    RFSW4_HIGH,
 };

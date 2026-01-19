@@ -326,19 +326,29 @@ pub struct GnssContextStatus {
 #[allow(async_fn_in_trait)]
 pub trait GnssExt {
     /// Set the GNSS constellations to use
-    async fn gnss_set_constellation(&mut self, constellation_mask: GnssConstellationMask) -> Result<(), RadioError>;
+    async fn gnss_set_constellation(
+        &mut self,
+        constellation_mask: GnssConstellationMask,
+    ) -> Result<(), RadioError>;
 
     /// Read the currently configured GNSS constellations
     async fn gnss_read_constellation(&mut self) -> Result<GnssConstellationMask, RadioError>;
 
     /// Read the supported GNSS constellations for this chip
-    async fn gnss_read_supported_constellations(&mut self) -> Result<GnssConstellationMask, RadioError>;
+    async fn gnss_read_supported_constellations(
+        &mut self,
+    ) -> Result<GnssConstellationMask, RadioError>;
 
     /// Set the GNSS scan mode
     async fn gnss_set_scan_mode(&mut self, scan_mode: GnssScanMode) -> Result<(), RadioError>;
 
     /// Launch a GNSS scan
-    async fn gnss_scan(&mut self, effort_mode: GnssSearchMode, result_mask: u8, nb_sv_max: u8) -> Result<(), RadioError>;
+    async fn gnss_scan(
+        &mut self,
+        effort_mode: GnssSearchMode,
+        result_mask: u8,
+        nb_sv_max: u8,
+    ) -> Result<(), RadioError>;
 
     /// Get the size of the GNSS scan result
     async fn gnss_get_result_size(&mut self) -> Result<u16, RadioError>;
@@ -350,13 +360,21 @@ pub trait GnssExt {
     async fn gnss_get_nb_satellites(&mut self) -> Result<u8, RadioError>;
 
     /// Get detected satellite information
-    async fn gnss_get_satellites(&mut self, satellites: &mut [GnssDetectedSatellite], nb_satellites: u8) -> Result<u8, RadioError>;
+    async fn gnss_get_satellites(
+        &mut self,
+        satellites: &mut [GnssDetectedSatellite],
+        nb_satellites: u8,
+    ) -> Result<u8, RadioError>;
 
     /// Set the assistance position
-    async fn gnss_set_assistance_position(&mut self, position: &GnssAssistancePosition) -> Result<(), RadioError>;
+    async fn gnss_set_assistance_position(
+        &mut self,
+        position: &GnssAssistancePosition,
+    ) -> Result<(), RadioError>;
 
     /// Read the assistance position
-    async fn gnss_read_assistance_position(&mut self) -> Result<GnssAssistancePosition, RadioError>;
+    async fn gnss_read_assistance_position(&mut self)
+        -> Result<GnssAssistancePosition, RadioError>;
 
     /// Read the GNSS firmware version
     async fn gnss_read_firmware_version(&mut self) -> Result<GnssVersion, RadioError>;
@@ -365,7 +383,10 @@ pub trait GnssExt {
     async fn gnss_get_context_status(&mut self) -> Result<GnssContextStatus, RadioError>;
 
     /// Set the frequency search space
-    async fn gnss_set_freq_search_space(&mut self, freq_search_space: GnssFreqSearchSpace) -> Result<(), RadioError>;
+    async fn gnss_set_freq_search_space(
+        &mut self,
+        freq_search_space: GnssFreqSearchSpace,
+    ) -> Result<(), RadioError>;
 
     /// Read the current frequency search space configuration
     async fn gnss_read_freq_search_space(&mut self) -> Result<GnssFreqSearchSpace, RadioError>;
@@ -377,13 +398,25 @@ pub trait GnssExt {
     async fn gnss_reset_position(&mut self) -> Result<(), RadioError>;
 
     /// Update almanac from satellite signals
-    async fn gnss_almanac_update_from_sat(&mut self, constellation_mask: u8, effort_mode: GnssSearchMode) -> Result<(), RadioError>;
+    async fn gnss_almanac_update_from_sat(
+        &mut self,
+        constellation_mask: u8,
+        effort_mode: GnssSearchMode,
+    ) -> Result<(), RadioError>;
 
     /// Read almanac data
-    async fn gnss_read_almanac(&mut self, sv_id: u8, nb_sv: u8, almanac_buffer: &mut [u8]) -> Result<usize, RadioError>;
+    async fn gnss_read_almanac(
+        &mut self,
+        sv_id: u8,
+        nb_sv: u8,
+        almanac_buffer: &mut [u8],
+    ) -> Result<usize, RadioError>;
 
     /// Read almanac data for a single satellite (convenience method)
-    async fn gnss_read_almanac_per_satellite(&mut self, sv_id: u8) -> Result<[u8; GNSS_SINGLE_ALMANAC_READ_SIZE], RadioError>;
+    async fn gnss_read_almanac_per_satellite(
+        &mut self,
+        sv_id: u8,
+    ) -> Result<[u8; GNSS_SINGLE_ALMANAC_READ_SIZE], RadioError>;
 
     /// Get the theoretical number of visible satellites
     ///
@@ -423,7 +456,10 @@ where
     IV: lora_phy::mod_traits::InterfaceVariant,
     C: lora_phy::lr1110::variant::Lr1110Variant,
 {
-    async fn gnss_set_constellation(&mut self, constellation_mask: GnssConstellationMask) -> Result<(), RadioError> {
+    async fn gnss_set_constellation(
+        &mut self,
+        constellation_mask: GnssConstellationMask,
+    ) -> Result<(), RadioError> {
         let opcode = GnssOpCode::SetConstellation.bytes();
         let cmd = [opcode[0], opcode[1], constellation_mask];
         self.execute_command(&cmd).await
@@ -433,15 +469,19 @@ where
         let opcode = GnssOpCode::ReadConstellation.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer[0])
     }
 
-    async fn gnss_read_supported_constellations(&mut self) -> Result<GnssConstellationMask, RadioError> {
+    async fn gnss_read_supported_constellations(
+        &mut self,
+    ) -> Result<GnssConstellationMask, RadioError> {
         let opcode = GnssOpCode::ReadSupportedConstellation.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer[0])
     }
 
@@ -451,9 +491,20 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn gnss_scan(&mut self, effort_mode: GnssSearchMode, result_mask: u8, nb_sv_max: u8) -> Result<(), RadioError> {
+    async fn gnss_scan(
+        &mut self,
+        effort_mode: GnssSearchMode,
+        result_mask: u8,
+        nb_sv_max: u8,
+    ) -> Result<(), RadioError> {
         let opcode = GnssOpCode::Scan.bytes();
-        let cmd = [opcode[0], opcode[1], effort_mode.value(), result_mask, nb_sv_max];
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            effort_mode.value(),
+            result_mask,
+            nb_sv_max,
+        ];
         self.execute_command(&cmd).await
     }
 
@@ -461,32 +512,40 @@ where
         let opcode = GnssOpCode::GetResultSize.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 2];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16))
     }
 
     async fn gnss_read_results(&mut self, result_buffer: &mut [u8]) -> Result<(), RadioError> {
         let opcode = GnssOpCode::ReadResults.bytes();
         let cmd = [opcode[0], opcode[1]];
-        self.execute_command_with_response(&cmd, result_buffer).await
+        self.execute_command_with_response(&cmd, result_buffer)
+            .await
     }
 
     async fn gnss_get_nb_satellites(&mut self) -> Result<u8, RadioError> {
         let opcode = GnssOpCode::GetNbSatellites.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer[0])
     }
 
-    async fn gnss_get_satellites(&mut self, satellites: &mut [GnssDetectedSatellite], nb_satellites: u8) -> Result<u8, RadioError> {
+    async fn gnss_get_satellites(
+        &mut self,
+        satellites: &mut [GnssDetectedSatellite],
+        nb_satellites: u8,
+    ) -> Result<u8, RadioError> {
         let opcode = GnssOpCode::GetSatellites.bytes();
         let cmd = [opcode[0], opcode[1]];
 
         // Each satellite entry is 4 bytes: id(1) + cnr(1) + doppler(2)
         let n = (nb_satellites as usize).min(satellites.len()).min(32);
         let mut rbuffer = [0u8; 128]; // 32 * 4 = 128 max
-        self.execute_command_with_response(&cmd, &mut rbuffer[..n * 4]).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer[..n * 4])
+            .await?;
 
         for (i, satellite) in satellites.iter_mut().enumerate().take(n) {
             let offset = i * 4;
@@ -501,7 +560,10 @@ where
         Ok(n as u8)
     }
 
-    async fn gnss_set_assistance_position(&mut self, position: &GnssAssistancePosition) -> Result<(), RadioError> {
+    async fn gnss_set_assistance_position(
+        &mut self,
+        position: &GnssAssistancePosition,
+    ) -> Result<(), RadioError> {
         let latitude = ((position.latitude * 2048.0) / GNSS_SCALING_LATITUDE) as i16;
         let longitude = ((position.longitude * 2048.0) / GNSS_SCALING_LONGITUDE) as i16;
 
@@ -517,11 +579,14 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn gnss_read_assistance_position(&mut self) -> Result<GnssAssistancePosition, RadioError> {
+    async fn gnss_read_assistance_position(
+        &mut self,
+    ) -> Result<GnssAssistancePosition, RadioError> {
         let opcode = GnssOpCode::ReadAssistancePosition.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 4];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         let latitude_raw = ((rbuffer[0] as i16) << 8) | (rbuffer[1] as i16);
         let longitude_raw = ((rbuffer[2] as i16) << 8) | (rbuffer[3] as i16);
@@ -536,7 +601,8 @@ where
         let opcode = GnssOpCode::ReadFwVersion.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 2];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(GnssVersion {
             gnss_firmware: rbuffer[0],
@@ -548,7 +614,8 @@ where
         let opcode = GnssOpCode::GetContextStatus.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; GNSS_CONTEXT_STATUS_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         // Parse the context status bytes per SWDR001
         let firmware_version = rbuffer[0];
@@ -559,7 +626,8 @@ where
         let error_code = GnssErrorCode::from(rbuffer[5] & 0x0F);
         let almanac_update_gps = (rbuffer[6] & 0x02) != 0;
         let almanac_update_beidou = (rbuffer[6] & 0x04) != 0;
-        let freq_search_space = GnssFreqSearchSpace::from(((rbuffer[6] & 0x01) << 1) | ((rbuffer[7] & 0x80) >> 7));
+        let freq_search_space =
+            GnssFreqSearchSpace::from(((rbuffer[6] & 0x01) << 1) | ((rbuffer[7] & 0x80) >> 7));
 
         Ok(GnssContextStatus {
             firmware_version,
@@ -571,7 +639,10 @@ where
         })
     }
 
-    async fn gnss_set_freq_search_space(&mut self, freq_search_space: GnssFreqSearchSpace) -> Result<(), RadioError> {
+    async fn gnss_set_freq_search_space(
+        &mut self,
+        freq_search_space: GnssFreqSearchSpace,
+    ) -> Result<(), RadioError> {
         let opcode = GnssOpCode::SetFreqSearchSpace.bytes();
         let cmd = [opcode[0], opcode[1], freq_search_space.value()];
         self.execute_command(&cmd).await
@@ -589,27 +660,48 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn gnss_almanac_update_from_sat(&mut self, constellation_mask: u8, effort_mode: GnssSearchMode) -> Result<(), RadioError> {
+    async fn gnss_almanac_update_from_sat(
+        &mut self,
+        constellation_mask: u8,
+        effort_mode: GnssSearchMode,
+    ) -> Result<(), RadioError> {
         let opcode = GnssOpCode::AlmanacUpdateFromSat.bytes();
         // Per SWDR001: constellation_mask first, then effort_mode
-        let cmd = [opcode[0], opcode[1], constellation_mask, effort_mode.value()];
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            constellation_mask,
+            effort_mode.value(),
+        ];
         self.execute_command(&cmd).await
     }
 
-    async fn gnss_read_almanac(&mut self, sv_id: u8, nb_sv: u8, almanac_buffer: &mut [u8]) -> Result<usize, RadioError> {
+    async fn gnss_read_almanac(
+        &mut self,
+        sv_id: u8,
+        nb_sv: u8,
+        almanac_buffer: &mut [u8],
+    ) -> Result<usize, RadioError> {
         let expected_size = (nb_sv as usize) * GNSS_SINGLE_ALMANAC_READ_SIZE;
         if almanac_buffer.len() < expected_size {
-            return Err(RadioError::PayloadSizeMismatch(expected_size, almanac_buffer.len()));
+            return Err(RadioError::PayloadSizeMismatch(
+                expected_size,
+                almanac_buffer.len(),
+            ));
         }
 
         let opcode = GnssOpCode::AlmanacRead.bytes();
         let cmd = [opcode[0], opcode[1], sv_id, nb_sv];
-        self.execute_command_with_response(&cmd, &mut almanac_buffer[..expected_size]).await?;
+        self.execute_command_with_response(&cmd, &mut almanac_buffer[..expected_size])
+            .await?;
 
         Ok(expected_size)
     }
 
-    async fn gnss_read_almanac_per_satellite(&mut self, sv_id: u8) -> Result<[u8; GNSS_SINGLE_ALMANAC_READ_SIZE], RadioError> {
+    async fn gnss_read_almanac_per_satellite(
+        &mut self,
+        sv_id: u8,
+    ) -> Result<[u8; GNSS_SINGLE_ALMANAC_READ_SIZE], RadioError> {
         let mut almanac = [0u8; GNSS_SINGLE_ALMANAC_READ_SIZE];
         self.gnss_read_almanac(sv_id, 1, &mut almanac).await?;
         Ok(almanac)
@@ -619,7 +711,8 @@ where
         let opcode = GnssOpCode::ReadFreqSearchSpace.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(GnssFreqSearchSpace::from(rbuffer[0]))
     }
 
@@ -653,7 +746,8 @@ where
         ];
 
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer[0])
     }
 
@@ -672,7 +766,8 @@ where
             return Err(RadioError::PayloadSizeMismatch(result_size, rbuffer.len()));
         }
 
-        self.execute_command_with_response(&cmd, &mut rbuffer[..result_size]).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer[..result_size])
+            .await?;
 
         // Parse results
         let count = satellites.len().min(result_size / 3);

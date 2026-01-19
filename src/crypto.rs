@@ -255,7 +255,11 @@ pub trait CryptoExt {
     async fn crypto_select(&mut self, element: CryptoElement) -> Result<(), RadioError>;
 
     /// Set a key in the specified key slot
-    async fn crypto_set_key(&mut self, key_id: CryptoKeyId, key: &CryptoKey) -> Result<CryptoStatus, RadioError>;
+    async fn crypto_set_key(
+        &mut self,
+        key_id: CryptoKeyId,
+        key: &CryptoKey,
+    ) -> Result<CryptoStatus, RadioError>;
 
     /// Derive a new key from an existing key using a nonce
     async fn crypto_derive_key(
@@ -329,10 +333,17 @@ pub trait CryptoExt {
     ) -> Result<CryptoStatus, RadioError>;
 
     /// Get a crypto parameter
-    async fn crypto_get_parameter(&mut self, param_id: u8) -> Result<(CryptoStatus, CryptoParam), RadioError>;
+    async fn crypto_get_parameter(
+        &mut self,
+        param_id: u8,
+    ) -> Result<(CryptoStatus, CryptoParam), RadioError>;
 
     /// Check a portion of an encrypted firmware image
-    async fn crypto_check_encrypted_fw_image(&mut self, offset: u32, data: &[u32]) -> Result<(), RadioError>;
+    async fn crypto_check_encrypted_fw_image(
+        &mut self,
+        offset: u32,
+        data: &[u32],
+    ) -> Result<(), RadioError>;
 
     /// Get the result of encrypted firmware image check
     async fn crypto_get_check_encrypted_fw_image_result(&mut self) -> Result<bool, RadioError>;
@@ -354,7 +365,11 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn crypto_set_key(&mut self, key_id: CryptoKeyId, key: &CryptoKey) -> Result<CryptoStatus, RadioError> {
+    async fn crypto_set_key(
+        &mut self,
+        key_id: CryptoKeyId,
+        key: &CryptoKey,
+    ) -> Result<CryptoStatus, RadioError> {
         let opcode = CryptoOpCode::SetKey.bytes();
         let mut cmd = [0u8; 2 + 1 + CRYPTO_KEY_LENGTH];
         cmd[0] = opcode[0];
@@ -363,7 +378,8 @@ where
         cmd[3..3 + CRYPTO_KEY_LENGTH].copy_from_slice(key);
 
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(CryptoStatus::from(rbuffer[0]))
     }
 
@@ -382,7 +398,8 @@ where
         cmd[4..4 + CRYPTO_NONCE_LENGTH].copy_from_slice(nonce);
 
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(CryptoStatus::from(rbuffer[0]))
     }
 
@@ -402,7 +419,10 @@ where
             return Err(RadioError::PayloadSizeMismatch(header_len, header.len()));
         }
         if data_out.len() < data_in.len() {
-            return Err(RadioError::PayloadSizeMismatch(data_in.len(), data_out.len()));
+            return Err(RadioError::PayloadSizeMismatch(
+                data_in.len(),
+                data_out.len(),
+            ));
         }
 
         let mut cmd = [0u8; 2 + 1 + 1 + 1 + 1 + 12]; // Max header size for v1.1x
@@ -415,12 +435,14 @@ where
         cmd[6..6 + header_len].copy_from_slice(&header[..header_len]);
 
         let cmd_len = 6 + header_len;
-        self.execute_command_with_payload(&cmd[..cmd_len], data_in).await?;
+        self.execute_command_with_payload(&cmd[..cmd_len], data_in)
+            .await?;
 
         // Read result: status (1) + data
         let mut rbuffer = [0u8; 256];
         let result_len = 1 + data_in.len();
-        self.execute_command_with_response(&[], &mut rbuffer[..result_len]).await?;
+        self.execute_command_with_response(&[], &mut rbuffer[..result_len])
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         data_out[..data_in.len()].copy_from_slice(&rbuffer[1..result_len]);
@@ -439,7 +461,8 @@ where
 
         // Read result: status (1) + MIC (4)
         let mut rbuffer = [0u8; 1 + CRYPTO_MIC_LENGTH];
-        self.execute_command_with_response(&[], &mut rbuffer).await?;
+        self.execute_command_with_response(&[], &mut rbuffer)
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         let mut mic = [0u8; CRYPTO_MIC_LENGTH];
@@ -464,7 +487,8 @@ where
         self.execute_command_with_payload(&cmd, data).await?;
 
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&[], &mut rbuffer).await?;
+        self.execute_command_with_response(&[], &mut rbuffer)
+            .await?;
         Ok(CryptoStatus::from(rbuffer[0]))
     }
 
@@ -486,7 +510,8 @@ where
         // Read result: status (1) + encrypted data
         let mut rbuffer = [0u8; 256];
         let result_len = 1 + data.len();
-        self.execute_command_with_response(&[], &mut rbuffer[..result_len]).await?;
+        self.execute_command_with_response(&[], &mut rbuffer[..result_len])
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         result[..data.len()].copy_from_slice(&rbuffer[1..result_len]);
@@ -511,7 +536,8 @@ where
         // Read result: status (1) + encrypted data
         let mut rbuffer = [0u8; 256];
         let result_len = 1 + data.len();
-        self.execute_command_with_response(&[], &mut rbuffer[..result_len]).await?;
+        self.execute_command_with_response(&[], &mut rbuffer[..result_len])
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         result[..data.len()].copy_from_slice(&rbuffer[1..result_len]);
@@ -536,7 +562,8 @@ where
         // Read result: status (1) + decrypted data
         let mut rbuffer = [0u8; 256];
         let result_len = 1 + data.len();
-        self.execute_command_with_response(&[], &mut rbuffer[..result_len]).await?;
+        self.execute_command_with_response(&[], &mut rbuffer[..result_len])
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         result[..data.len()].copy_from_slice(&rbuffer[1..result_len]);
@@ -548,7 +575,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(CryptoStatus::from(rbuffer[0]))
     }
 
@@ -557,7 +585,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(CryptoStatus::from(rbuffer[0]))
     }
 
@@ -574,16 +603,21 @@ where
         cmd[3..3 + CRYPTO_PARAMETER_LENGTH].copy_from_slice(parameter);
 
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(CryptoStatus::from(rbuffer[0]))
     }
 
-    async fn crypto_get_parameter(&mut self, param_id: u8) -> Result<(CryptoStatus, CryptoParam), RadioError> {
+    async fn crypto_get_parameter(
+        &mut self,
+        param_id: u8,
+    ) -> Result<(CryptoStatus, CryptoParam), RadioError> {
         let opcode = CryptoOpCode::GetParameter.bytes();
         let cmd = [opcode[0], opcode[1], param_id];
 
         let mut rbuffer = [0u8; 1 + CRYPTO_PARAMETER_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         let mut param = [0u8; CRYPTO_PARAMETER_LENGTH];
@@ -591,7 +625,11 @@ where
         Ok((status, param))
     }
 
-    async fn crypto_check_encrypted_fw_image(&mut self, offset: u32, data: &[u32]) -> Result<(), RadioError> {
+    async fn crypto_check_encrypted_fw_image(
+        &mut self,
+        offset: u32,
+        data: &[u32],
+    ) -> Result<(), RadioError> {
         let opcode = CryptoOpCode::CheckEncryptedFwImage.bytes();
         let mut cmd = [0u8; 2 + 4 + 1];
         cmd[0] = opcode[0];
@@ -612,7 +650,8 @@ where
             payload[offset + 3] = word as u8;
         }
 
-        self.execute_command_with_payload(&cmd, &payload[..data.len() * 4]).await
+        self.execute_command_with_payload(&cmd, &payload[..data.len() * 4])
+            .await
     }
 
     async fn crypto_get_check_encrypted_fw_image_result(&mut self) -> Result<bool, RadioError> {
@@ -620,7 +659,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer[0] != 0)
     }
 }

@@ -590,7 +590,13 @@ pub trait RadioControlExt {
     /// * `bw` - Bandwidth (see lora_bw module in ranging.rs)
     /// * `cr` - Coding rate (see lora_cr module in ranging.rs)
     /// * `ldro` - Low data rate optimization (0 = off, 1 = on)
-    async fn set_lora_mod_params(&mut self, sf: u8, bw: u8, cr: u8, ldro: u8) -> Result<(), RadioError>;
+    async fn set_lora_mod_params(
+        &mut self,
+        sf: u8,
+        bw: u8,
+        cr: u8,
+        ldro: u8,
+    ) -> Result<(), RadioError>;
 
     /// Set LoRa packet parameters
     ///
@@ -628,7 +634,12 @@ pub trait RadioControlExt {
     /// * `offset` - Offset in RX buffer (usually 0)
     /// * `length` - Number of bytes to read
     /// * `buffer` - Buffer to store read data
-    async fn read_buffer(&mut self, offset: u8, length: u8, buffer: &mut [u8]) -> Result<(), RadioError>;
+    async fn read_buffer(
+        &mut self,
+        offset: u8,
+        length: u8,
+        buffer: &mut [u8],
+    ) -> Result<(), RadioError>;
 
     /// Get RX buffer status
     ///
@@ -675,34 +686,51 @@ pub trait RadioControlExt {
     ///
     /// # Arguments
     /// * `network_type` - Public (sync word 0x34) or Private (sync word 0x12)
-    async fn set_lora_public_network(&mut self, network_type: LoRaNetworkType) -> Result<(), RadioError>;
+    async fn set_lora_public_network(
+        &mut self,
+        network_type: LoRaNetworkType,
+    ) -> Result<(), RadioError>;
 
     // Advanced RX/TX Control
     /// Set RX mode with timeout in RTC steps
     ///
     /// # Arguments
     /// * `timeout_rtc_step` - Timeout in RTC steps (15.625 µs per step), 0xFFFFFF for continuous
-    async fn set_rx_with_timeout_in_rtc_step(&mut self, timeout_rtc_step: u32) -> Result<(), RadioError>;
+    async fn set_rx_with_timeout_in_rtc_step(
+        &mut self,
+        timeout_rtc_step: u32,
+    ) -> Result<(), RadioError>;
 
     /// Set TX mode with timeout in RTC steps
     ///
     /// # Arguments
     /// * `timeout_rtc_step` - Timeout in RTC steps (15.625 µs per step), 0 for no timeout
-    async fn set_tx_with_timeout_in_rtc_step(&mut self, timeout_rtc_step: u32) -> Result<(), RadioError>;
+    async fn set_tx_with_timeout_in_rtc_step(
+        &mut self,
+        timeout_rtc_step: u32,
+    ) -> Result<(), RadioError>;
 
     /// Configure automatic TX after RX or RX after TX
     ///
     /// # Arguments
     /// * `timeout_rtc_step` - Timeout for the automatic operation
     /// * `intermediary_mode` - Intermediary mode between operations
-    async fn auto_tx_rx(&mut self, timeout_rtc_step: u32, intermediary_mode: IntermediaryMode) -> Result<(), RadioError>;
+    async fn auto_tx_rx(
+        &mut self,
+        timeout_rtc_step: u32,
+        intermediary_mode: IntermediaryMode,
+    ) -> Result<(), RadioError>;
 
     /// Set RX duty cycle mode with timing in milliseconds
     ///
     /// # Arguments
     /// * `rx_time_ms` - RX time in milliseconds
     /// * `sleep_time_ms` - Sleep time in milliseconds
-    async fn set_rx_duty_cycle(&mut self, rx_time_ms: u32, sleep_time_ms: u32) -> Result<(), RadioError>;
+    async fn set_rx_duty_cycle(
+        &mut self,
+        rx_time_ms: u32,
+        sleep_time_ms: u32,
+    ) -> Result<(), RadioError>;
 
     /// Set RX duty cycle mode with timing in RTC steps
     ///
@@ -723,13 +751,20 @@ pub trait RadioControlExt {
     /// # Arguments
     /// * `node_address` - Node address
     /// * `broadcast_address` - Broadcast address
-    async fn set_pkt_address(&mut self, node_address: u8, broadcast_address: u8) -> Result<(), RadioError>;
+    async fn set_pkt_address(
+        &mut self,
+        node_address: u8,
+        broadcast_address: u8,
+    ) -> Result<(), RadioError>;
 
     /// Set RX/TX fallback mode
     ///
     /// # Arguments
     /// * `fallback_mode` - Mode to enter after RX or TX completes
-    async fn set_rx_tx_fallback_mode(&mut self, fallback_mode: FallbackMode) -> Result<(), RadioError>;
+    async fn set_rx_tx_fallback_mode(
+        &mut self,
+        fallback_mode: FallbackMode,
+    ) -> Result<(), RadioError>;
 
     /// Configure timeout behavior on preamble detection
     ///
@@ -776,14 +811,21 @@ pub trait RadioControlExt {
     ///
     /// # Returns
     /// Computed RX bandwidth parameter
-    async fn get_gfsk_rx_bandwidth(&mut self, bitrate: u32, bandwidth: u32) -> Result<u8, RadioError>;
+    async fn get_gfsk_rx_bandwidth(
+        &mut self,
+        bitrate: u32,
+        bandwidth: u32,
+    ) -> Result<u8, RadioError>;
 
     // Calibration
     /// Set RSSI calibration table
     ///
     /// # Arguments
     /// * `table` - RSSI calibration table
-    async fn set_rssi_calibration(&mut self, table: &RssiCalibrationTable) -> Result<(), RadioError>;
+    async fn set_rssi_calibration(
+        &mut self,
+        table: &RssiCalibrationTable,
+    ) -> Result<(), RadioError>;
 
     // BPSK Support
     /// Set BPSK modulation parameters
@@ -816,7 +858,8 @@ pub trait RadioControlExt {
     /// # Arguments
     /// * `power_dbm` - Output power in dBm
     /// * `ramp_time` - PA ramp time
-    async fn set_tx_params(&mut self, power_dbm: i8, ramp_time: RampTime) -> Result<(), RadioError>;
+    async fn set_tx_params(&mut self, power_dbm: i8, ramp_time: RampTime)
+        -> Result<(), RadioError>;
 
     // GFSK Support
     /// Set GFSK modulation parameters
@@ -920,7 +963,13 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn set_lora_mod_params(&mut self, sf: u8, bw: u8, cr: u8, ldro: u8) -> Result<(), RadioError> {
+    async fn set_lora_mod_params(
+        &mut self,
+        sf: u8,
+        bw: u8,
+        cr: u8,
+        ldro: u8,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x8B
         let cmd = [0x8B, sf, bw, cr, ldro];
         self.execute_command(&cmd).await
@@ -959,20 +1008,30 @@ where
         self.execute_command_with_payload(&cmd, data).await
     }
 
-    async fn read_buffer(&mut self, offset: u8, length: u8, buffer: &mut [u8]) -> Result<(), RadioError> {
+    async fn read_buffer(
+        &mut self,
+        offset: u8,
+        length: u8,
+        buffer: &mut [u8],
+    ) -> Result<(), RadioError> {
         // OpCode: 0x0D
         let cmd = [0x0D, offset, length];
         if buffer.len() < length as usize {
-            return Err(RadioError::PayloadSizeMismatch(length as usize, buffer.len()));
+            return Err(RadioError::PayloadSizeMismatch(
+                length as usize,
+                buffer.len(),
+            ));
         }
-        self.execute_command_with_response(&cmd, &mut buffer[..length as usize]).await
+        self.execute_command_with_response(&cmd, &mut buffer[..length as usize])
+            .await
     }
 
     async fn get_rx_buffer_status(&mut self) -> Result<(u8, u8), RadioError> {
         // OpCode: 0x17
         let cmd = [0x17];
         let mut rbuffer = [0u8; 2];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok((rbuffer[0], rbuffer[1]))
     }
 
@@ -980,7 +1039,8 @@ where
         // OpCode: 0x1D
         let cmd = [0x1D];
         let mut rbuffer = [0u8; 3];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         // Parse RSSI and SNR from response
         let rssi = -((rbuffer[0] as i16) >> 1);
@@ -1003,7 +1063,11 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn set_tx_params(&mut self, power_dbm: i8, ramp_time: RampTime) -> Result<(), RadioError> {
+    async fn set_tx_params(
+        &mut self,
+        power_dbm: i8,
+        ramp_time: RampTime,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x0211
         let cmd = [0x02, 0x11, power_dbm as u8, ramp_time as u8];
         self.execute_command(&cmd).await
@@ -1080,7 +1144,8 @@ where
         // OpCode: 0x0201
         let cmd = [0x02, 0x01];
         let mut rbuffer = [0u8; 6];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(GfskStats {
             nb_pkt_received: ((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16),
@@ -1093,7 +1158,8 @@ where
         // OpCode: 0x0201
         let cmd = [0x02, 0x01];
         let mut rbuffer = [0u8; 8];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(LoRaStats {
             nb_pkt_received: ((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16),
@@ -1108,7 +1174,8 @@ where
         // OpCode: 0x0202
         let cmd = [0x02, 0x02];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(PacketType::from(rbuffer[0]))
     }
 
@@ -1116,7 +1183,8 @@ where
         // OpCode: 0x0204
         let cmd = [0x02, 0x04];
         let mut rbuffer = [0u8; 4];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(GfskPktStatus {
             rssi_sync_in_dbm: -(rbuffer[0] as i8) / 2,
@@ -1135,7 +1203,8 @@ where
         // OpCode: 0x0205
         let cmd = [0x02, 0x05];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(-(rbuffer[0] as i16) / 2)
     }
 
@@ -1143,7 +1212,8 @@ where
         // OpCode: 0x0230
         let cmd = [0x02, 0x30];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         let is_crc_present = (rbuffer[0] & 0x08) != 0;
         let cr = rbuffer[0] & 0x07;
@@ -1169,14 +1239,20 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn set_lora_public_network(&mut self, network_type: LoRaNetworkType) -> Result<(), RadioError> {
+    async fn set_lora_public_network(
+        &mut self,
+        network_type: LoRaNetworkType,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x0208
         let cmd = [0x02, 0x08, network_type as u8];
         self.execute_command(&cmd).await
     }
 
     // Advanced RX/TX Control
-    async fn set_rx_with_timeout_in_rtc_step(&mut self, timeout_rtc_step: u32) -> Result<(), RadioError> {
+    async fn set_rx_with_timeout_in_rtc_step(
+        &mut self,
+        timeout_rtc_step: u32,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x0209
         let cmd = [
             0x02,
@@ -1188,7 +1264,10 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn set_tx_with_timeout_in_rtc_step(&mut self, timeout_rtc_step: u32) -> Result<(), RadioError> {
+    async fn set_tx_with_timeout_in_rtc_step(
+        &mut self,
+        timeout_rtc_step: u32,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x020A
         let cmd = [
             0x02,
@@ -1200,7 +1279,11 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn auto_tx_rx(&mut self, timeout_rtc_step: u32, intermediary_mode: IntermediaryMode) -> Result<(), RadioError> {
+    async fn auto_tx_rx(
+        &mut self,
+        timeout_rtc_step: u32,
+        intermediary_mode: IntermediaryMode,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x020C
         let cmd = [
             0x02,
@@ -1213,7 +1296,11 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn set_rx_duty_cycle(&mut self, rx_time_ms: u32, sleep_time_ms: u32) -> Result<(), RadioError> {
+    async fn set_rx_duty_cycle(
+        &mut self,
+        rx_time_ms: u32,
+        sleep_time_ms: u32,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x0214
         // Convert ms to RTC steps (1 RTC step = 15.625 µs)
         let rx_time_rtc = (rx_time_ms * 64) / 1000; // ms to RTC steps
@@ -1254,13 +1341,20 @@ where
     }
 
     // Packet Configuration
-    async fn set_pkt_address(&mut self, node_address: u8, broadcast_address: u8) -> Result<(), RadioError> {
+    async fn set_pkt_address(
+        &mut self,
+        node_address: u8,
+        broadcast_address: u8,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x0212
         let cmd = [0x02, 0x12, node_address, broadcast_address];
         self.execute_command(&cmd).await
     }
 
-    async fn set_rx_tx_fallback_mode(&mut self, fallback_mode: FallbackMode) -> Result<(), RadioError> {
+    async fn set_rx_tx_fallback_mode(
+        &mut self,
+        fallback_mode: FallbackMode,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x0213
         let cmd = [0x02, 0x13, fallback_mode as u8];
         self.execute_command(&cmd).await
@@ -1322,7 +1416,11 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn get_gfsk_rx_bandwidth(&mut self, _bitrate: u32, bandwidth: u32) -> Result<u8, RadioError> {
+    async fn get_gfsk_rx_bandwidth(
+        &mut self,
+        _bitrate: u32,
+        bandwidth: u32,
+    ) -> Result<u8, RadioError> {
         // This is a helper function that doesn't call the radio
         // It computes the RX bandwidth parameter based on bitrate and bandwidth
         // Based on SWDR001 implementation, this is a lookup table operation
@@ -1332,14 +1430,31 @@ where
     }
 
     // Calibration
-    async fn set_rssi_calibration(&mut self, table: &RssiCalibrationTable) -> Result<(), RadioError> {
+    async fn set_rssi_calibration(
+        &mut self,
+        table: &RssiCalibrationTable,
+    ) -> Result<(), RadioError> {
         // OpCode: 0x0229
         let cmd = [
-            0x02, 0x29,
-            table.g4, table.g5, table.g6, table.g7, table.g8, table.g9,
-            table.g10, table.g11, table.g12, table.g13,
-            table.g13hp1, table.g13hp2, table.g13hp3, table.g13hp4,
-            table.g13hp5, table.g13hp6, table.g13hp7,
+            0x02,
+            0x29,
+            table.g4,
+            table.g5,
+            table.g6,
+            table.g7,
+            table.g8,
+            table.g9,
+            table.g10,
+            table.g11,
+            table.g12,
+            table.g13,
+            table.g13hp1,
+            table.g13hp2,
+            table.g13hp3,
+            table.g13hp4,
+            table.g13hp5,
+            table.g13hp6,
+            table.g13hp7,
             (table.gain_offset >> 8) as u8,
             table.gain_offset as u8,
         ];
@@ -1386,7 +1501,8 @@ where
             use crate::regmem::RegMemExt as _;
             let mask = !(1 << 30); // Mask with bit 30 cleared
             let data = 0; // Data doesn't matter, mask will clear the bit
-            self.regmem_write_regmem32_mask(0x00F30054, mask, data).await
+            self.regmem_write_regmem32_mask(0x00F30054, mask, data)
+                .await
         }
         #[cfg(not(feature = "regmem"))]
         {
@@ -1451,19 +1567,19 @@ pub fn convert_nb_symb_to_mant_exp(nb_symbols: u16) -> (u8, u8) {
 /// Bandwidth in Hz
 pub fn get_lora_bw_in_hz(bw: u8) -> u32 {
     match bw {
-        0x08 => 10420,   // BW_10
-        0x01 => 15630,   // BW_15
-        0x09 => 20830,   // BW_20
-        0x02 => 31250,   // BW_31
-        0x0A => 41670,   // BW_41
-        0x03 => 62500,   // BW_62
-        0x04 => 125000,  // BW_125
-        0x05 => 250000,  // BW_250
-        0x06 => 500000,  // BW_500
-        0x0D => 203000,  // BW_200 (2.4 GHz)
-        0x0E => 406000,  // BW_400 (2.4 GHz)
-        0x0F => 812000,  // BW_800 (2.4 GHz)
-        _ => 125000,     // Default to 125 kHz
+        0x08 => 10420,  // BW_10
+        0x01 => 15630,  // BW_15
+        0x09 => 20830,  // BW_20
+        0x02 => 31250,  // BW_31
+        0x0A => 41670,  // BW_41
+        0x03 => 62500,  // BW_62
+        0x04 => 125000, // BW_125
+        0x05 => 250000, // BW_250
+        0x06 => 500000, // BW_500
+        0x0D => 203000, // BW_200 (2.4 GHz)
+        0x0E => 406000, // BW_400 (2.4 GHz)
+        0x0F => 812000, // BW_800 (2.4 GHz)
+        _ => 125000,    // Default to 125 kHz
     }
 }
 
@@ -1506,7 +1622,8 @@ pub fn get_lora_time_on_air_numerator(
     let cr_denom = 4 + cr;
 
     let n_payload_full = if payload_bits > 0 {
-        let temp = 8 + ((payload_bits * cr_denom + (4 * sf - 4 * ldro_offset)) / (4 * sf)) * cr_denom;
+        let temp =
+            8 + ((payload_bits * cr_denom + (4 * sf - 4 * ldro_offset)) / (4 * sf)) * cr_denom;
         temp / cr_denom * (1 << sf)
     } else {
         0

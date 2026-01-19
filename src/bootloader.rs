@@ -245,7 +245,11 @@ pub trait BootloaderExt {
     /// - Complete firmware image must be split into chunks of 64 words
     /// - Chunks must be sent in order, starting with offset = 0
     /// - Last chunk may be shorter than 64 words
-    async fn bootloader_write_flash_encrypted(&mut self, offset: u32, data: &[u32]) -> Result<(), RadioError>;
+    async fn bootloader_write_flash_encrypted(
+        &mut self,
+        offset: u32,
+        data: &[u32],
+    ) -> Result<(), RadioError>;
 
     /// Reboot the chip
     ///
@@ -282,7 +286,8 @@ where
         let opcode = BootloaderOpCode::GetStatus.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 6];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(BootloaderStatus {
             stat1: BootloaderStat1::from_byte(rbuffer[0]),
@@ -305,7 +310,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; BOOTLOADER_VERSION_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(BootloaderVersion {
             hw: rbuffer[0],
@@ -320,7 +326,11 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn bootloader_write_flash_encrypted(&mut self, offset: u32, data: &[u32]) -> Result<(), RadioError> {
+    async fn bootloader_write_flash_encrypted(
+        &mut self,
+        offset: u32,
+        data: &[u32],
+    ) -> Result<(), RadioError> {
         if data.len() > BOOTLOADER_FLASH_BLOCK_SIZE_WORDS {
             return Err(RadioError::PayloadSizeMismatch(
                 BOOTLOADER_FLASH_BLOCK_SIZE_WORDS,
@@ -349,7 +359,8 @@ where
         }
 
         let payload_len = data.len() * 4;
-        self.execute_command_with_payload(&cmd, &payload[..payload_len]).await
+        self.execute_command_with_payload(&cmd, &payload[..payload_len])
+            .await
     }
 
     async fn bootloader_reboot(&mut self, stay_in_bootloader: bool) -> Result<(), RadioError> {
@@ -367,7 +378,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; BOOTLOADER_PIN_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer)
     }
 
@@ -376,7 +388,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; BOOTLOADER_CHIP_EUI_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer)
     }
 
@@ -385,7 +398,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; BOOTLOADER_JOIN_EUI_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer)
     }
 }

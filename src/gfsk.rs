@@ -319,7 +319,10 @@ pub trait GfskExt {
     ///
     /// # Arguments
     /// * `params` - GFSK modulation parameters (bitrate, pulse shape, bandwidth, frequency deviation)
-    async fn set_gfsk_mod_params(&mut self, params: &GfskModulationParams) -> Result<(), RadioError>;
+    async fn set_gfsk_mod_params(
+        &mut self,
+        params: &GfskModulationParams,
+    ) -> Result<(), RadioError>;
 
     /// Set GFSK packet parameters
     ///
@@ -354,8 +357,11 @@ pub trait GfskExt {
     /// # Arguments
     /// * `node_address` - Node address
     /// * `broadcast_address` - Broadcast address
-    async fn set_gfsk_pkt_address(&mut self, node_address: u8, broadcast_address: u8)
-        -> Result<(), RadioError>;
+    async fn set_gfsk_pkt_address(
+        &mut self,
+        node_address: u8,
+        broadcast_address: u8,
+    ) -> Result<(), RadioError>;
 
     /// Get GFSK packet status
     ///
@@ -380,7 +386,10 @@ where
     IV: InterfaceVariant,
     C: Lr1110Variant,
 {
-    async fn set_gfsk_mod_params(&mut self, params: &GfskModulationParams) -> Result<(), RadioError> {
+    async fn set_gfsk_mod_params(
+        &mut self,
+        params: &GfskModulationParams,
+    ) -> Result<(), RadioError> {
         // Convert bitrate to chip format: (32 * 32000000) / bitrate
         let br = ((32u64 * LR1110_XTAL_FREQ as u64) / params.bitrate_bps as u64) as u32;
         // Convert frequency deviation to chip format: (fdev * 2^25) / 32000000
@@ -482,7 +491,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; 4];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         // Parse RSSI values (raw values are unsigned, convert to dBm)
         let rssi_sync_dbm = -((rbuffer[1] as i16) / 2);
@@ -496,7 +506,8 @@ where
         let cmd = [opcode[0], opcode[1]];
 
         let mut rbuffer = [0u8; 6];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(GfskStats {
             nb_pkt_received: ((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16),

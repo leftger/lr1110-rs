@@ -4,10 +4,10 @@
 /// waits for the BUSY pin. Use this on any platform where the BUSY pin is connected.
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
-use lora_phy::DelayNs;
 use lora_phy::mod_params::RadioError;
 use lora_phy::mod_params::RadioError::*;
 use lora_phy::mod_traits::InterfaceVariant;
+use lora_phy::DelayNs;
 
 /// InterfaceVariant for LR1110 on STM32WBA
 ///
@@ -193,7 +193,8 @@ where
     }
 }
 
-impl<RESET, BUSY, DIO1, CTRL> InterfaceVariant for Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
+impl<RESET, BUSY, DIO1, CTRL> InterfaceVariant
+    for Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
 where
     RESET: OutputPin,
     BUSY: InputPin,

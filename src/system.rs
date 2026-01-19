@@ -665,7 +665,8 @@ pub trait SystemExt {
     /// # Arguments
     /// * `voltage` - TCXO supply voltage
     /// * `timeout` - Timeout in 31.25us units (24-bit value)
-    async fn set_tcxo_mode(&mut self, voltage: TcxoVoltage, timeout: u32) -> Result<(), RadioError>;
+    async fn set_tcxo_mode(&mut self, voltage: TcxoVoltage, timeout: u32)
+        -> Result<(), RadioError>;
 
     /// Configure DIO pins as RF switch
     ///
@@ -739,7 +740,8 @@ where
         let opcode = SystemOpCode::ReadPin.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; LR11XX_SYSTEM_PIN_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer)
     }
 
@@ -756,7 +758,8 @@ where
         cmd[10..18].copy_from_slice(join_eui);
 
         let mut rbuffer = [0u8; LR11XX_SYSTEM_PIN_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer)
     }
 
@@ -764,7 +767,8 @@ where
         let opcode = SystemOpCode::GetTemp.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 2];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16))
     }
@@ -773,7 +777,8 @@ where
         let opcode = SystemOpCode::GetVbat.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(rbuffer[0])
     }
@@ -782,7 +787,8 @@ where
         let opcode = SystemOpCode::GetRandom.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 4];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(((rbuffer[0] as u32) << 24)
             | ((rbuffer[1] as u32) << 16)
@@ -794,7 +800,8 @@ where
         let opcode = SystemOpCode::ReadUid.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; LR11XX_SYSTEM_UID_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(rbuffer)
     }
@@ -803,7 +810,8 @@ where
         let opcode = SystemOpCode::ReadJoinEui.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; LR11XX_SYSTEM_JOIN_EUI_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(rbuffer)
     }
@@ -877,7 +885,8 @@ where
         let opcode = SystemOpCode::GetVersion.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 4];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(Version {
             hw: rbuffer[0],
@@ -890,7 +899,8 @@ where
         let opcode = SystemOpCode::GetErrors.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 2];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         let raw = ((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16);
         Ok(SystemErrors::from(raw))
@@ -923,7 +933,8 @@ where
         let opcode = SystemOpCode::GetStatus.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 6]; // stat1, stat2, irq_status (4 bytes)
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         // Extract IRQ status from bytes 2-5
         Ok(((rbuffer[2] as u32) << 24)
@@ -939,7 +950,11 @@ where
     }
 
     // Configuration
-    async fn set_tcxo_mode(&mut self, voltage: TcxoVoltage, timeout: u32) -> Result<(), RadioError> {
+    async fn set_tcxo_mode(
+        &mut self,
+        voltage: TcxoVoltage,
+        timeout: u32,
+    ) -> Result<(), RadioError> {
         let opcode = SystemOpCode::SetTcxoMode.bytes();
         let cmd = [
             opcode[0],

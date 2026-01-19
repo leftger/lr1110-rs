@@ -189,35 +189,39 @@ pub mod ranging_config {
 pub mod ranging_channels {
     /// ISM 902-928 MHz (US915) - 39 channels
     pub const US915: [u32; 39] = [
-        907850000, 902650000, 914350000, 906550000, 905900000, 924750000, 926700000, 918250000, 921500000, 909150000,
-        907200000, 924100000, 903950000, 910450000, 917600000, 919550000, 923450000, 925400000, 909800000, 915000000,
-        912400000, 904600000, 908500000, 911100000, 911750000, 916300000, 918900000, 905250000, 913700000, 927350000,
-        926050000, 916950000, 913050000, 903300000, 920200000, 922800000, 915650000, 922150000, 920850000,
+        907850000, 902650000, 914350000, 906550000, 905900000, 924750000, 926700000, 918250000,
+        921500000, 909150000, 907200000, 924100000, 903950000, 910450000, 917600000, 919550000,
+        923450000, 925400000, 909800000, 915000000, 912400000, 904600000, 908500000, 911100000,
+        911750000, 916300000, 918900000, 905250000, 913700000, 927350000, 926050000, 916950000,
+        913050000, 903300000, 920200000, 922800000, 915650000, 922150000, 920850000,
     ];
 
     /// ISM 863-870 MHz (EU868) - 39 channels
     pub const EU868: [u32; 39] = [
-        863750000, 865100000, 864800000, 868400000, 865250000, 867500000, 865550000, 867650000, 866150000, 864050000,
-        867800000, 863300000, 863450000, 867950000, 868550000, 868850000, 867200000, 867050000, 864650000, 863900000,
-        864500000, 866450000, 865400000, 868700000, 863150000, 866750000, 866300000, 864950000, 864350000, 866000000,
-        866900000, 868250000, 865850000, 865700000, 867350000, 868100000, 863600000, 866600000, 864200000,
+        863750000, 865100000, 864800000, 868400000, 865250000, 867500000, 865550000, 867650000,
+        866150000, 864050000, 867800000, 863300000, 863450000, 867950000, 868550000, 868850000,
+        867200000, 867050000, 864650000, 863900000, 864500000, 866450000, 865400000, 868700000,
+        863150000, 866750000, 866300000, 864950000, 864350000, 866000000, 866900000, 868250000,
+        865850000, 865700000, 867350000, 868100000, 863600000, 866600000, 864200000,
     ];
 
     /// ISM 490-510 MHz (CN490) - 39 channels
     pub const CN490: [u32; 39] = [
-        490810000, 508940000, 496690000, 507470000, 504040000, 508450000, 505020000, 497670000, 497180000, 500610000,
-        494240000, 493260000, 495710000, 491300000, 504530000, 501100000, 502080000, 501590000, 499140000, 494730000,
-        506980000, 492280000, 509430000, 495220000, 492770000, 507960000, 493750000, 499630000, 496200000, 498160000,
-        505510000, 500120000, 503060000, 506000000, 506490000, 498650000, 491790000, 503550000, 502570000,
+        490810000, 508940000, 496690000, 507470000, 504040000, 508450000, 505020000, 497670000,
+        497180000, 500610000, 494240000, 493260000, 495710000, 491300000, 504530000, 501100000,
+        502080000, 501590000, 499140000, 494730000, 506980000, 492280000, 509430000, 495220000,
+        492770000, 507960000, 493750000, 499630000, 496200000, 498160000, 505510000, 500120000,
+        503060000, 506000000, 506490000, 498650000, 491790000, 503550000, 502570000,
     ];
 
     /// ISM 2.4 GHz - 39 channels
     pub const ISM2G4: [u32; 39] = [
-        2450000000, 2402000000, 2476000000, 2436000000, 2430000000, 2468000000, 2458000000, 2416000000, 2424000000,
-        2478000000, 2456000000, 2448000000, 2462000000, 2472000000, 2432000000, 2446000000, 2422000000, 2442000000,
-        2460000000, 2474000000, 2414000000, 2464000000, 2454000000, 2444000000, 2404000000, 2434000000, 2410000000,
-        2408000000, 2440000000, 2452000000, 2480000000, 2426000000, 2428000000, 2466000000, 2418000000, 2412000000,
-        2406000000, 2470000000, 2438000000,
+        2450000000, 2402000000, 2476000000, 2436000000, 2430000000, 2468000000, 2458000000,
+        2416000000, 2424000000, 2478000000, 2456000000, 2448000000, 2462000000, 2472000000,
+        2432000000, 2446000000, 2422000000, 2442000000, 2460000000, 2474000000, 2414000000,
+        2464000000, 2454000000, 2444000000, 2404000000, 2434000000, 2410000000, 2408000000,
+        2440000000, 2452000000, 2480000000, 2426000000, 2428000000, 2466000000, 2418000000,
+        2412000000, 2406000000, 2470000000, 2438000000,
     ];
 }
 
@@ -301,7 +305,12 @@ pub fn calculate_symbol_time_ms(bw: u8, sf: u8) -> f32 {
 ///
 /// # Returns
 /// Delay in milliseconds
-pub fn calculate_ranging_request_delay_ms(bw: u8, sf: u8, preamble_len: u16, response_symbols: u8) -> u32 {
+pub fn calculate_ranging_request_delay_ms(
+    bw: u8,
+    sf: u8,
+    preamble_len: u16,
+    response_symbols: u8,
+) -> u32 {
     let symbol_time_ms = calculate_symbol_time_ms(bw, sf);
 
     // Extra symbols for SF5/SF6
@@ -328,7 +337,10 @@ pub fn calculate_ranging_request_delay_ms(bw: u8, sf: u8, preamble_len: u16, res
 
     // Add PA ramp time (approximately 0.3ms for typical values) and processing time
     let pa_ramp_ms = 0.3;
-    let delay_ms = (symbol_time_ms * total_symbols) + pa_ramp_ms + ranging_config::DONE_PROCESSING_TIME_MS as f32 + 1.0;
+    let delay_ms = (symbol_time_ms * total_symbols)
+        + pa_ramp_ms
+        + ranging_config::DONE_PROCESSING_TIME_MS as f32
+        + 1.0;
 
     delay_ms as u32
 }
@@ -368,7 +380,8 @@ pub trait RangingExt {
     /// The address is used in subordinate mode when receiving RTToF requests.
     /// The subordinate compares `check_length` bytes (LSB first) of the request
     /// address with its own address. Non-matching packets are discarded.
-    async fn rttof_set_address(&mut self, address: u32, check_length: u8) -> Result<(), RadioError>;
+    async fn rttof_set_address(&mut self, address: u32, check_length: u8)
+        -> Result<(), RadioError>;
 
     /// Set the RTToF request address for manager mode
     ///
@@ -381,7 +394,10 @@ pub trait RangingExt {
     /// The transceiver hardware induces a delay depending on the physical layer
     /// configuration (bandwidth, spreading factor). This delay needs to be
     /// compensated by a calibration value for accurate RTToF measurements.
-    async fn rttof_set_rx_tx_delay_indicator(&mut self, delay_indicator: u32) -> Result<(), RadioError>;
+    async fn rttof_set_rx_tx_delay_indicator(
+        &mut self,
+        delay_indicator: u32,
+    ) -> Result<(), RadioError>;
 
     /// Configure RTToF specific parameters
     ///
@@ -392,13 +408,19 @@ pub trait RangingExt {
     /// Get the raw RTToF result from the manager device
     ///
     /// Use `rttof_distance_raw_to_meters()` or `rttof_rssi_raw_to_dbm()` to convert.
-    async fn rttof_get_raw_result(&mut self, result_type: RttofResultType) -> Result<RttofRawResult, RadioError>;
+    async fn rttof_get_raw_result(
+        &mut self,
+        result_type: RttofResultType,
+    ) -> Result<RttofRawResult, RadioError>;
 
     /// Get complete RTToF distance result with RSSI
     ///
     /// Convenience function that retrieves both distance and RSSI results
     /// and converts them to meaningful units.
-    async fn rttof_get_distance_result(&mut self, bandwidth: Bandwidth) -> Result<RttofDistanceResult, RadioError>;
+    async fn rttof_get_distance_result(
+        &mut self,
+        bandwidth: Bandwidth,
+    ) -> Result<RttofDistanceResult, RadioError>;
 }
 
 // =============================================================================
@@ -411,7 +433,11 @@ where
     IV: lora_phy::mod_traits::InterfaceVariant,
     C: lora_phy::lr1110::variant::Lr1110Variant,
 {
-    async fn rttof_set_address(&mut self, address: u32, check_length: u8) -> Result<(), RadioError> {
+    async fn rttof_set_address(
+        &mut self,
+        address: u32,
+        check_length: u8,
+    ) -> Result<(), RadioError> {
         let opcode = RttofOpCode::SetAddress.bytes();
         let cmd = [
             opcode[0],
@@ -438,7 +464,10 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn rttof_set_rx_tx_delay_indicator(&mut self, delay_indicator: u32) -> Result<(), RadioError> {
+    async fn rttof_set_rx_tx_delay_indicator(
+        &mut self,
+        delay_indicator: u32,
+    ) -> Result<(), RadioError> {
         let opcode = RttofOpCode::SetRxTxDelay.bytes();
         let cmd = [
             opcode[0],
@@ -457,15 +486,22 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn rttof_get_raw_result(&mut self, result_type: RttofResultType) -> Result<RttofRawResult, RadioError> {
+    async fn rttof_get_raw_result(
+        &mut self,
+        result_type: RttofResultType,
+    ) -> Result<RttofRawResult, RadioError> {
         let opcode = RttofOpCode::GetResult.bytes();
         let cmd = [opcode[0], opcode[1], result_type.value()];
         let mut rbuffer = [0u8; RTTOF_RESULT_LENGTH];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer)
     }
 
-    async fn rttof_get_distance_result(&mut self, bandwidth: Bandwidth) -> Result<RttofDistanceResult, RadioError> {
+    async fn rttof_get_distance_result(
+        &mut self,
+        bandwidth: Bandwidth,
+    ) -> Result<RttofDistanceResult, RadioError> {
         // Get distance result
         let raw_distance = self.rttof_get_raw_result(RttofResultType::Raw).await?;
         let distance_m = rttof_distance_raw_to_meters(bandwidth, &raw_distance);

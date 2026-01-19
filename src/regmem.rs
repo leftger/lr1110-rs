@@ -83,7 +83,8 @@ pub trait RegMemExt {
     /// # Arguments
     /// * `address` - Starting memory address
     /// * `data` - Array of 32-bit words to write (max 64 words)
-    async fn regmem_write_regmem32(&mut self, address: u32, data: &[u32]) -> Result<(), RadioError>;
+    async fn regmem_write_regmem32(&mut self, address: u32, data: &[u32])
+        -> Result<(), RadioError>;
 
     /// Read 32-bit words from register/memory
     ///
@@ -93,7 +94,11 @@ pub trait RegMemExt {
     ///
     /// # Returns
     /// Number of words read
-    async fn regmem_read_regmem32(&mut self, address: u32, buffer: &mut [u32]) -> Result<usize, RadioError>;
+    async fn regmem_read_regmem32(
+        &mut self,
+        address: u32,
+        buffer: &mut [u32],
+    ) -> Result<usize, RadioError>;
 
     /// Write bytes to memory
     ///
@@ -110,7 +115,11 @@ pub trait RegMemExt {
     ///
     /// # Returns
     /// Number of bytes read
-    async fn regmem_read_mem8(&mut self, address: u32, buffer: &mut [u8]) -> Result<usize, RadioError>;
+    async fn regmem_read_mem8(
+        &mut self,
+        address: u32,
+        buffer: &mut [u8],
+    ) -> Result<usize, RadioError>;
 
     /// Write bytes to TX buffer
     ///
@@ -126,7 +135,11 @@ pub trait RegMemExt {
     ///
     /// # Returns
     /// Number of bytes read
-    async fn regmem_read_buffer8(&mut self, offset: u8, buffer: &mut [u8]) -> Result<usize, RadioError>;
+    async fn regmem_read_buffer8(
+        &mut self,
+        offset: u8,
+        buffer: &mut [u8],
+    ) -> Result<usize, RadioError>;
 
     /// Clear the RX buffer
     ///
@@ -141,7 +154,12 @@ pub trait RegMemExt {
     /// * `address` - Register address
     /// * `mask` - Bits to modify (1 = modify, 0 = preserve)
     /// * `data` - New data for masked bits
-    async fn regmem_write_regmem32_mask(&mut self, address: u32, mask: u32, data: u32) -> Result<(), RadioError>;
+    async fn regmem_write_regmem32_mask(
+        &mut self,
+        address: u32,
+        mask: u32,
+        data: u32,
+    ) -> Result<(), RadioError>;
 
     /// Apply the workaround for the High ACP (Adjacent Channel Power) limitation
     ///
@@ -168,7 +186,11 @@ where
     IV: InterfaceVariant,
     C: Lr1110Variant,
 {
-    async fn regmem_write_regmem32(&mut self, address: u32, data: &[u32]) -> Result<(), RadioError> {
+    async fn regmem_write_regmem32(
+        &mut self,
+        address: u32,
+        data: &[u32],
+    ) -> Result<(), RadioError> {
         if data.len() > REGMEM_MAX_READ_WRITE_WORDS {
             return Err(RadioError::PayloadSizeMismatch(
                 REGMEM_MAX_READ_WRITE_WORDS,
@@ -197,10 +219,15 @@ where
         }
 
         let payload_len = data.len() * 4;
-        self.execute_command_with_payload(&cmd, &payload[..payload_len]).await
+        self.execute_command_with_payload(&cmd, &payload[..payload_len])
+            .await
     }
 
-    async fn regmem_read_regmem32(&mut self, address: u32, buffer: &mut [u32]) -> Result<usize, RadioError> {
+    async fn regmem_read_regmem32(
+        &mut self,
+        address: u32,
+        buffer: &mut [u32],
+    ) -> Result<usize, RadioError> {
         if buffer.len() > REGMEM_MAX_READ_WRITE_WORDS {
             return Err(RadioError::PayloadSizeMismatch(
                 REGMEM_MAX_READ_WRITE_WORDS,
@@ -221,7 +248,8 @@ where
 
         let mut rbuffer = [0u8; REGMEM_MAX_READ_WRITE_WORDS * 4];
         let read_len = buffer.len() * 4;
-        self.execute_command_with_response(&cmd, &mut rbuffer[..read_len]).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer[..read_len])
+            .await?;
 
         // Convert bytes to 32-bit words (big-endian)
         for (i, word) in buffer.iter_mut().enumerate() {
@@ -249,7 +277,11 @@ where
         self.execute_command_with_payload(&cmd, data).await
     }
 
-    async fn regmem_read_mem8(&mut self, address: u32, buffer: &mut [u8]) -> Result<usize, RadioError> {
+    async fn regmem_read_mem8(
+        &mut self,
+        address: u32,
+        buffer: &mut [u8],
+    ) -> Result<usize, RadioError> {
         let opcode = RegMemOpCode::ReadMem8.bytes();
         let cmd = [
             opcode[0],
@@ -272,7 +304,11 @@ where
         self.execute_command_with_payload(&cmd, data).await
     }
 
-    async fn regmem_read_buffer8(&mut self, offset: u8, buffer: &mut [u8]) -> Result<usize, RadioError> {
+    async fn regmem_read_buffer8(
+        &mut self,
+        offset: u8,
+        buffer: &mut [u8],
+    ) -> Result<usize, RadioError> {
         let opcode = RegMemOpCode::ReadBuffer8.bytes();
         let cmd = [opcode[0], opcode[1], offset, buffer.len() as u8];
 
@@ -286,7 +322,12 @@ where
         self.execute_command(&cmd).await
     }
 
-    async fn regmem_write_regmem32_mask(&mut self, address: u32, mask: u32, data: u32) -> Result<(), RadioError> {
+    async fn regmem_write_regmem32_mask(
+        &mut self,
+        address: u32,
+        mask: u32,
+        data: u32,
+    ) -> Result<(), RadioError> {
         let opcode = RegMemOpCode::WriteRegMem32Mask.bytes();
         let cmd = [
             opcode[0],
@@ -309,6 +350,7 @@ where
 
     async fn apply_high_acp_workaround(&mut self) -> Result<(), RadioError> {
         // Write 32-bit register with mask: clear bit 30 at address 0x00F30054
-        self.regmem_write_regmem32_mask(HIGH_ACP_WORKAROUND_REG, 1 << 30, 0).await
+        self.regmem_write_regmem32_mask(HIGH_ACP_WORKAROUND_REG, 1 << 30, 0)
+            .await
     }
 }

@@ -665,7 +665,8 @@ where
         let opcode = WifiOpCode::GetResultSize.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 1];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(rbuffer[0])
     }
 
@@ -695,7 +696,8 @@ where
 
         // Use a stack buffer for reading (max 32 results * 9 bytes = 288 bytes)
         let mut buffer = [0u8; 288];
-        self.execute_command_with_response(&cmd, &mut buffer[..total_size]).await?;
+        self.execute_command_with_response(&cmd, &mut buffer[..total_size])
+            .await?;
 
         // Parse results
         for (i, result) in results.iter_mut().enumerate().take(count as usize) {
@@ -703,7 +705,9 @@ where
             result.data_rate_info_byte = buffer[offset];
             result.channel_info_byte = buffer[offset + 1];
             result.rssi = buffer[offset + 2] as i8;
-            result.mac_address.copy_from_slice(&buffer[offset + 3..offset + 9]);
+            result
+                .mac_address
+                .copy_from_slice(&buffer[offset + 3..offset + 9]);
         }
 
         Ok(count)
@@ -735,7 +739,8 @@ where
 
         // Use stack buffer (max 32 results * 22 bytes = 704 bytes)
         let mut buffer = [0u8; 704];
-        self.execute_command_with_response(&cmd, &mut buffer[..total_size]).await?;
+        self.execute_command_with_response(&cmd, &mut buffer[..total_size])
+            .await?;
 
         // Parse results
         for (i, result) in results.iter_mut().enumerate().take(count as usize) {
@@ -744,7 +749,9 @@ where
             result.channel_info_byte = buffer[offset + 1];
             result.rssi = buffer[offset + 2] as i8;
             result.frame_type_info_byte = buffer[offset + 3];
-            result.mac_address.copy_from_slice(&buffer[offset + 4..offset + 10]);
+            result
+                .mac_address
+                .copy_from_slice(&buffer[offset + 4..offset + 10]);
             result.phi_offset = ((buffer[offset + 10] as i16) << 8) | (buffer[offset + 11] as i16);
             result.timestamp_us = ((buffer[offset + 12] as u64) << 56)
                 | ((buffer[offset + 13] as u64) << 48)
@@ -754,7 +761,8 @@ where
                 | ((buffer[offset + 17] as u64) << 16)
                 | ((buffer[offset + 18] as u64) << 8)
                 | (buffer[offset + 19] as u64);
-            result.beacon_period_tu = ((buffer[offset + 20] as u16) << 8) | (buffer[offset + 21] as u16);
+            result.beacon_period_tu =
+                ((buffer[offset + 20] as u16) << 8) | (buffer[offset + 21] as u16);
         }
 
         Ok(count)
@@ -764,7 +772,8 @@ where
         let opcode = WifiOpCode::ReadCumulTiming.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; WIFI_ALL_CUMULATIVE_TIMING_SIZE];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(WifiCumulativeTimings {
             rx_detection_us: ((rbuffer[0] as u32) << 24)
@@ -796,7 +805,8 @@ where
         let opcode = WifiOpCode::GetVersion.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; WIFI_VERSION_SIZE];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
         Ok(WifiVersion {
             major: rbuffer[0],
             minor: rbuffer[1],
