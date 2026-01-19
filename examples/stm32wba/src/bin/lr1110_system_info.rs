@@ -35,7 +35,8 @@ use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
-use lr1110_rs::system::SystemErrors;
+use lr1110_rs::radio::RadioControlExt;
+use lr1110_rs::system::{SystemErrors, SystemExt};
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -120,6 +121,10 @@ async fn main(_spawner: Spawner) {
     // Reset and initialize the radio
     radio.reset(&mut Delay).await.unwrap();
     embassy_time::Timer::after_millis(100).await;
+
+    // Initialize system (TCXO, DC-DC, calibration) - required for RNG and crypto operations
+    info!("Configuring TCXO and calibrating...");
+    radio.init_system().await.unwrap();
 
     // Read system version
     info!("-------------------------------------------");
@@ -210,18 +215,32 @@ async fn main(_spawner: Spawner) {
     }
 
     // Generate random numbers
+    // Note: For best entropy, the radio should be in RX mode when generating random numbers
     info!("-------------------------------------------");
     info!("Hardware Random Number Generator:");
-    for i in 0..3 {
+
+    // Configure radio for RX mode to improve RNG entropy
+    info!("  Configuring radio in RX mode for better entropy...");
+    // Set packet type to LoRa
+    let _ = radio.set_packet_type(0x01).await; // 0x01 = LoRa
+    // Set a frequency (915 MHz for example)
+    let _ = radio.set_rf_frequency(915_000_000).await;
+    // Enable continuous RX mode
+    let _ = radio.set_rx(0xFFFFFF).await; // Continuous RX
+    embassy_time::Timer::after_millis(50).await;
+
+    info!("  Generating random numbers:");
+    for i in 0..5 {
         match radio.get_random_number().await {
             Ok(random) => {
-                info!("  Random {}: 0x{:08X}", i + 1, random);
+                info!("    Random #{}: 0x{:08X} (decimal: {})", i + 1, random, random);
             }
             Err(e) => {
-                error!("  Failed to generate random number: {:?}", e);
+                error!("    Failed to generate random number: {:?}", e);
                 break;
             }
         }
+        embassy_time::Timer::after_millis(10).await;
     }
 
     // Check for errors
