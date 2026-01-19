@@ -124,3 +124,33 @@ pub use bootloader::BootloaderExt;
 
 #[cfg(feature = "regmem")]
 pub use regmem::RegMemExt;
+
+// =============================================================================
+// Re-export types from modules
+// =============================================================================
+
+// Radio module types
+pub use radio::{
+    CadExitMode, CadParams, GfskAddressFiltering, GfskBandwidth, GfskCrcType, GfskDcFree,
+    GfskHeaderType, GfskModParams, GfskPktParams, GfskPreambleDetector, GfskPulseShape,
+    GfskStats, LoRaStats, PaConfig, PaRegSupply, PaSelection, RampTime,
+};
+
+// System module types
+#[cfg(feature = "system")]
+pub use system::{
+    CalibrationParam, ChipType, IrqMask, RfSwitchConfig, SleepConfig, StandbyConfig, SystemErrors,
+    TcxoVoltage, Version, LR11XX_SYSTEM_JOIN_EUI_LENGTH, LR11XX_SYSTEM_UID_LENGTH,
+    // Calibration constants
+    CALIB_ADC_MASK, CALIB_ALL, CALIB_HF_RC_MASK, CALIB_IMG_MASK, CALIB_LF_RC_MASK,
+    CALIB_PLL_MASK, CALIB_PLL_TX_MASK,
+    // IRQ constants
+    IRQ_ALL, IRQ_CAD_DETECTED, IRQ_CAD_DONE, IRQ_CMD_ERROR, IRQ_CRC_ERROR, IRQ_EOL, IRQ_ERROR,
+    IRQ_FSK_ADDR_ERROR, IRQ_FSK_LEN_ERROR, IRQ_GNSS_SCAN_DONE, IRQ_HEADER_ERROR,
+    IRQ_LORA_RX_TIMESTAMP, IRQ_LR_FHSS_INTRA_PKT_HOP, IRQ_NONE, IRQ_PREAMBLE_DETECTED,
+    IRQ_RANGING_EXCH_VALID, IRQ_RANGING_REQ_DISCARDED, IRQ_RANGING_REQ_VALID,
+    IRQ_RANGING_RESP_DONE, IRQ_RANGING_TIMEOUT, IRQ_RX_DONE, IRQ_SYNC_WORD_HEADER_VALID,
+    IRQ_TIMEOUT, IRQ_TX_DONE, IRQ_WIFI_SCAN_DONE,
+    // RF switch constants
+    RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH, RFSW4_HIGH,
+};
