@@ -338,7 +338,289 @@ pub trait CryptoExt {
     async fn crypto_get_check_encrypted_fw_image_result(&mut self) -> Result<bool, RadioError>;
 }
 
-// NOTE: Implementation requires lora-phy to expose low-level SPI interface.
-// This will be implemented once lora-phy adds the Lr1110Interface trait.
-//
-// For now, users can use the types defined above with their own implementation.
+// =============================================================================
+// CryptoExt trait implementation for Lr1110
+// =============================================================================
+
+impl<SPI, IV, C> CryptoExt for lora_phy::lr1110::Lr1110<SPI, IV, C>
+where
+    SPI: embedded_hal_async::spi::SpiDevice<u8>,
+    IV: lora_phy::mod_traits::InterfaceVariant,
+    C: lora_phy::lr1110::variant::Lr1110Variant,
+{
+    async fn crypto_select(&mut self, element: CryptoElement) -> Result<(), RadioError> {
+        let opcode = CryptoOpCode::Select.bytes();
+        let cmd = [opcode[0], opcode[1], element.value()];
+        self.execute_command(&cmd).await
+    }
+
+    async fn crypto_set_key(&mut self, key_id: CryptoKeyId, key: &CryptoKey) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::SetKey.bytes();
+        let mut cmd = [0u8; 2 + 1 + CRYPTO_KEY_LENGTH];
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = key_id.value();
+        cmd[3..3 + CRYPTO_KEY_LENGTH].copy_from_slice(key);
+
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    async fn crypto_derive_key(
+        &mut self,
+        src_key_id: CryptoKeyId,
+        dest_key_id: CryptoKeyId,
+        nonce: &CryptoNonce,
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::DeriveKey.bytes();
+        let mut cmd = [0u8; 2 + 1 + 1 + CRYPTO_NONCE_LENGTH];
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = src_key_id.value();
+        cmd[3] = dest_key_id.value();
+        cmd[4..4 + CRYPTO_NONCE_LENGTH].copy_from_slice(nonce);
+
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    async fn crypto_process_join_accept(
+        &mut self,
+        dec_key_id: CryptoKeyId,
+        ver_key_id: CryptoKeyId,
+        lorawan_version: CryptoLorawanVersion,
+        header: &[u8],
+        data_in: &[u8],
+        data_out: &mut [u8],
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::ProcessJoinAccept.bytes();
+        let header_len = lorawan_version.header_length();
+
+        if header.len() < header_len {
+            return Err(RadioError::PayloadSizeMismatch(header_len, header.len()));
+        }
+        if data_out.len() < data_in.len() {
+            return Err(RadioError::PayloadSizeMismatch(data_in.len(), data_out.len()));
+        }
+
+        let mut cmd = [0u8; 2 + 1 + 1 + 1 + 1 + 12]; // Max header size for v1.1x
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = dec_key_id.value();
+        cmd[3] = ver_key_id.value();
+        cmd[4] = lorawan_version.value();
+        cmd[5] = data_in.len() as u8;
+        cmd[6..6 + header_len].copy_from_slice(&header[..header_len]);
+
+        let cmd_len = 6 + header_len;
+        self.execute_command_with_payload(&cmd[..cmd_len], data_in).await?;
+
+        // Read result: status (1) + data
+        let mut rbuffer = [0u8; 256];
+        let result_len = 1 + data_in.len();
+        self.execute_command_with_response(&[], &mut rbuffer[..result_len]).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        data_out[..data_in.len()].copy_from_slice(&rbuffer[1..result_len]);
+        Ok(status)
+    }
+
+    async fn crypto_compute_aes_cmac(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+    ) -> Result<(CryptoStatus, CryptoMic), RadioError> {
+        let opcode = CryptoOpCode::ComputeAesCmac.bytes();
+        let cmd = [opcode[0], opcode[1], key_id.value(), data.len() as u8];
+
+        self.execute_command_with_payload(&cmd, data).await?;
+
+        // Read result: status (1) + MIC (4)
+        let mut rbuffer = [0u8; 1 + CRYPTO_MIC_LENGTH];
+        self.execute_command_with_response(&[], &mut rbuffer).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        let mut mic = [0u8; CRYPTO_MIC_LENGTH];
+        mic.copy_from_slice(&rbuffer[1..1 + CRYPTO_MIC_LENGTH]);
+        Ok((status, mic))
+    }
+
+    async fn crypto_verify_aes_cmac(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+        mic: &CryptoMic,
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::VerifyAesCmac.bytes();
+        let mut cmd = [0u8; 2 + 1 + 1 + CRYPTO_MIC_LENGTH];
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = key_id.value();
+        cmd[3] = data.len() as u8;
+        cmd[4..4 + CRYPTO_MIC_LENGTH].copy_from_slice(mic);
+
+        self.execute_command_with_payload(&cmd, data).await?;
+
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&[], &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    async fn crypto_aes_encrypt_01(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+        result: &mut [u8],
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::AesEncrypt01.bytes();
+        let cmd = [opcode[0], opcode[1], key_id.value(), data.len() as u8];
+
+        if result.len() < data.len() {
+            return Err(RadioError::PayloadSizeMismatch(data.len(), result.len()));
+        }
+
+        self.execute_command_with_payload(&cmd, data).await?;
+
+        // Read result: status (1) + encrypted data
+        let mut rbuffer = [0u8; 256];
+        let result_len = 1 + data.len();
+        self.execute_command_with_response(&[], &mut rbuffer[..result_len]).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        result[..data.len()].copy_from_slice(&rbuffer[1..result_len]);
+        Ok(status)
+    }
+
+    async fn crypto_aes_encrypt(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+        result: &mut [u8],
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::AesEncrypt.bytes();
+        let cmd = [opcode[0], opcode[1], key_id.value(), data.len() as u8];
+
+        if result.len() < data.len() {
+            return Err(RadioError::PayloadSizeMismatch(data.len(), result.len()));
+        }
+
+        self.execute_command_with_payload(&cmd, data).await?;
+
+        // Read result: status (1) + encrypted data
+        let mut rbuffer = [0u8; 256];
+        let result_len = 1 + data.len();
+        self.execute_command_with_response(&[], &mut rbuffer[..result_len]).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        result[..data.len()].copy_from_slice(&rbuffer[1..result_len]);
+        Ok(status)
+    }
+
+    async fn crypto_aes_decrypt(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+        result: &mut [u8],
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::AesDecrypt.bytes();
+        let cmd = [opcode[0], opcode[1], key_id.value(), data.len() as u8];
+
+        if result.len() < data.len() {
+            return Err(RadioError::PayloadSizeMismatch(data.len(), result.len()));
+        }
+
+        self.execute_command_with_payload(&cmd, data).await?;
+
+        // Read result: status (1) + decrypted data
+        let mut rbuffer = [0u8; 256];
+        let result_len = 1 + data.len();
+        self.execute_command_with_response(&[], &mut rbuffer[..result_len]).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        result[..data.len()].copy_from_slice(&rbuffer[1..result_len]);
+        Ok(status)
+    }
+
+    async fn crypto_store_to_flash(&mut self) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::StoreToFlash.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    async fn crypto_restore_from_flash(&mut self) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::RestoreFromFlash.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    async fn crypto_set_parameter(
+        &mut self,
+        param_id: u8,
+        parameter: &CryptoParam,
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::SetParameter.bytes();
+        let mut cmd = [0u8; 2 + 1 + CRYPTO_PARAMETER_LENGTH];
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = param_id;
+        cmd[3..3 + CRYPTO_PARAMETER_LENGTH].copy_from_slice(parameter);
+
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    async fn crypto_get_parameter(&mut self, param_id: u8) -> Result<(CryptoStatus, CryptoParam), RadioError> {
+        let opcode = CryptoOpCode::GetParameter.bytes();
+        let cmd = [opcode[0], opcode[1], param_id];
+
+        let mut rbuffer = [0u8; 1 + CRYPTO_PARAMETER_LENGTH];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        let mut param = [0u8; CRYPTO_PARAMETER_LENGTH];
+        param.copy_from_slice(&rbuffer[1..1 + CRYPTO_PARAMETER_LENGTH]);
+        Ok((status, param))
+    }
+
+    async fn crypto_check_encrypted_fw_image(&mut self, offset: u32, data: &[u32]) -> Result<(), RadioError> {
+        let opcode = CryptoOpCode::CheckEncryptedFwImage.bytes();
+        let mut cmd = [0u8; 2 + 4 + 1];
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = (offset >> 24) as u8;
+        cmd[3] = (offset >> 16) as u8;
+        cmd[4] = (offset >> 8) as u8;
+        cmd[5] = offset as u8;
+        cmd[6] = (data.len() * 4) as u8; // Length in bytes
+
+        // Convert u32 array to u8 array (big-endian)
+        let mut payload = [0u8; 256];
+        for (i, &word) in data.iter().enumerate() {
+            let offset = i * 4;
+            payload[offset] = (word >> 24) as u8;
+            payload[offset + 1] = (word >> 16) as u8;
+            payload[offset + 2] = (word >> 8) as u8;
+            payload[offset + 3] = word as u8;
+        }
+
+        self.execute_command_with_payload(&cmd, &payload[..data.len() * 4]).await
+    }
+
+    async fn crypto_get_check_encrypted_fw_image_result(&mut self) -> Result<bool, RadioError> {
+        let opcode = CryptoOpCode::GetCheckEncryptedFwImageResult.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer[0] != 0)
+    }
+}
