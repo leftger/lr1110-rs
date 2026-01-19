@@ -7,6 +7,9 @@
 //!
 //! - **GNSS**: GPS and BeiDou satellite scanning for geolocation
 //! - **WiFi**: Passive WiFi AP scanning for indoor positioning
+//! - **Almanac**: Age tracking and update management for GNSS almanac data
+//! - **IRQ Management**: Two-stage priority IRQ handling for GNSS/WiFi scans
+//! - **Radio Planner**: Coordinates concurrent radio operations
 //! - **Crypto**: Hardware AES encryption, CMAC, and key management
 //! - **Ranging**: RTToF (Round-Trip Time of Flight) distance measurement
 //! - **GFSK**: Gaussian Frequency Shift Keying modulation
@@ -15,26 +18,108 @@
 //! - **Bootloader**: Firmware update and chip identification
 //! - **RegMem**: Low-level register and memory access
 //!
-//! # Usage
+//! # Quick Start
 //!
-//! This crate provides extension traits that add methods to the `Lr1110` struct
-//! from `lora-phy`. Import the traits you need:
+//! ## Basic GNSS Scanning
 //!
 //! ```ignore
 //! use lora_phy::lr1110::Lr1110;
-//! use lr1110_rs::gnss::GnssExt;
-//! use lr1110_rs::gfsk::GfskExt;
-//! use lr1110_rs::system::SystemExt;
+//! use lr1110_rs::gnss::{GnssExt, GnssSearchMode};
 //!
-//! // Create your Lr1110 instance via lora-phy
 //! let mut radio = Lr1110::new(spi, iv, config);
 //!
-//! // Now you can use extension methods
-//! radio.gnss_scan(GnssSearchMode::HighEffort, 0x07, 0).await?;
-//!
-//! // Read temperature
-//! let temp = radio.get_temp().await?;
+//! // Simple GNSS scan
+//! radio.gnss_scan(GnssSearchMode::MidEffort, 0x00, 0).await?;
+//! embassy_time::Timer::after_secs(10).await;
+//! let num_sats = radio.gnss_get_nb_satellites().await?;
 //! ```
+//!
+//! ## Advanced GNSS with IRQ Management
+//!
+//! ```ignore
+//! use lr1110_rs::gnss_scan_manager::{GnssScanManager, ScanConfig, ScanMode};
+//! use lr1110_rs::gnss::{GNSS_GPS_MASK, GNSS_BEIDOU_MASK};
+//!
+//! let mut manager = GnssScanManager::new();
+//! manager.set_prescan_callback(|| { sidewalk_suspend(); });
+//! manager.set_postscan_callback(|| { sidewalk_resume(); });
+//!
+//! let config = ScanConfig {
+//!     constellation_mask: GNSS_GPS_MASK | GNSS_BEIDOU_MASK,
+//!     mode: ScanMode::Mobile { scan_group_size: 2, scan_group_delay_s: 0 },
+//!     ..Default::default()
+//! };
+//!
+//! let result = manager.scan(&mut radio, &config).await?;
+//! ```
+//!
+//! ## Almanac Management
+//!
+//! ```ignore
+//! use lr1110_rs::almanac::AlmanacManager;
+//!
+//! let mut almanac_mgr = AlmanacManager::new();
+//!
+//! // Check status with age tracking
+//! let status = almanac_mgr.check_status(&mut radio, true).await?;
+//! info!("GPS: {}% complete", status.gps.completion_percentage());
+//!
+//! // Update if needed
+//! if status.needs_update() {
+//!     let strategy = almanac_mgr.determine_update_strategy(&mut radio).await?;
+//!     almanac_mgr.start_update(&mut radio, strategy, GnssSearchMode::HighEffort).await?;
+//! }
+//! ```
+//!
+//! ## WiFi Scanning
+//!
+//! ```ignore
+//! use lr1110_rs::wifi::{WifiExt, WifiSignalTypeScan, WifiScanMode, WIFI_ALL_CHANNELS_MASK};
+//!
+//! radio.wifi_scan(
+//!     WifiSignalTypeScan::TypeBGN,
+//!     WIFI_ALL_CHANNELS_MASK,
+//!     WifiScanMode::Beacon,
+//!     32, 1, 90, false
+//! ).await?;
+//! ```
+//!
+//! # Feature Flags
+//!
+//! ```toml
+//! [dependencies]
+//! lr1110-rs = {
+//!     version = "0.1",
+//!     features = [
+//!         "gnss",        # GNSS scanning
+//!         "wifi",        # WiFi scanning
+//!         "system",      # System functions
+//!         "irq-manager", # Advanced IRQ management (requires embassy-time)
+//!         "defmt-03"     # Logging
+//!     ]
+//! }
+//! ```
+//!
+//! # Examples
+//!
+//! See `examples/stm32wba/src/bin/` for complete examples:
+//! - `lr1110_gnss_scan.rs` - Basic GNSS scanning (simple timeout)
+//! - `lr1110_gnss_scan_with_irq.rs` - Advanced GNSS with IRQ management
+//! - `lr1110_wifi_scan.rs` - Basic WiFi scanning
+//! - `lr1110_wifi_scan_with_irq.rs` - Advanced WiFi with IRQ management
+//! - `lr1110_almanac_manager.rs` - Almanac age tracking and updates
+//!
+//! # Source
+//!
+//! IRQ management and almanac features ported from:
+//! - **STM32-Sidewalk-SDK**: Amazon/STMicroelectronics implementation
+//! - **LoRa Basics Modem**: Semtech geolocation services
+//!
+//! # Platform Support
+//!
+//! - **Full support** (ARM Cortex-M3/M4/M7): STM32WBA, STM32F4, nRF52, etc.
+//! - **Limited support** (ARM Cortex-M0/M0+): RP2040, STM32L0 (single IRQ priority)
+//! - **Basic support** (Other): RISC-V, Xtensa (timestamp capture only)
 
 #![no_std]
 #![allow(async_fn_in_trait)]
@@ -68,8 +153,26 @@ pub mod radio;
 #[cfg(feature = "gnss")]
 pub mod gnss;
 
+#[cfg(all(feature = "gnss", feature = "irq-manager"))]
+pub mod gnss_irq;
+
+#[cfg(all(feature = "gnss", feature = "irq-manager"))]
+pub mod gnss_scan_manager;
+
+#[cfg(feature = "gnss")]
+pub mod almanac;
+
+#[cfg(feature = "irq-manager")]
+pub mod radio_planner;
+
 #[cfg(feature = "wifi")]
 pub mod wifi;
+
+#[cfg(all(feature = "wifi", feature = "irq-manager"))]
+pub mod wifi_irq;
+
+#[cfg(all(feature = "wifi", feature = "irq-manager"))]
+pub mod wifi_scan_manager;
 
 #[cfg(feature = "crypto")]
 pub mod crypto;
@@ -101,8 +204,17 @@ pub use radio::RadioControlExt;
 #[cfg(feature = "gnss")]
 pub use gnss::GnssExt;
 
+#[cfg(all(feature = "gnss", feature = "irq-manager"))]
+pub use gnss_scan_manager::GnssScanManager;
+
+#[cfg(feature = "gnss")]
+pub use almanac::AlmanacManager;
+
 #[cfg(feature = "wifi")]
 pub use wifi::WifiExt;
+
+#[cfg(all(feature = "wifi", feature = "irq-manager"))]
+pub use wifi_scan_manager::WifiScanManager;
 
 #[cfg(feature = "crypto")]
 pub use crypto::CryptoExt;

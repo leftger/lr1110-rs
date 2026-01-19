@@ -23,6 +23,12 @@ lora-phy = { git = "https://github.com/leftger/lora-rs", branch = "feat/lr1110-l
 embedded-hal = { version = "1" }
 embedded-hal-async = { version = "1" }
 
+# For no_std collections
+heapless = { version = "0.8", default-features = false }
+
+# Optional embassy-time for IRQ management features (matches embassy-stm32 version)
+embassy-time = { version = "0.5", optional = true }
+
 # Optional defmt support
 defmt = { version = "0.3", optional = true }
 
@@ -31,6 +37,9 @@ default = ["gnss", "wifi", "crypto", "ranging", "gfsk", "lr_fhss", "system", "bo
 
 ## Enable GNSS (GPS/BeiDou) scanning functionality
 gnss = []
+
+## Enable advanced IRQ management for GNSS/WiFi (requires embassy-time)
+irq-manager = ["dep:embassy-time"]
 
 ## Enable WiFi passive scanning functionality
 wifi = []

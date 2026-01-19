@@ -933,7 +933,8 @@ where
         let opcode = SystemOpCode::GetIrqStatus.bytes();
         let cmd = [opcode[0], opcode[1]];
         let mut rbuffer = [0u8; 4];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        self.execute_command_with_response(&cmd, &mut rbuffer)
+            .await?;
 
         Ok(((rbuffer[0] as u32) << 24)
             | ((rbuffer[1] as u32) << 16)
