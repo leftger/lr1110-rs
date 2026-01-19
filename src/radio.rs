@@ -535,6 +535,22 @@ pub struct RssiCalibrationTable {
 }
 
 // =============================================================================
+// LNA Configuration
+// =============================================================================
+
+/// LNA (Low Noise Amplifier) mode configuration
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum LnaMode {
+    /// Use only RFI_N_LF0 antenna (single-ended N)
+    SingleN = 1,
+    /// Use only RFI_P_LF0 antenna (single-ended P)
+    SingleP = 2,
+    /// Differential mode (default, uses both N and P)
+    Differential = 3,
+}
+
+// =============================================================================
 // Radio Control Extension Trait
 // =============================================================================
 
@@ -574,6 +590,15 @@ pub trait RadioControlExt {
     /// Use 0 for no timeout (single mode)
     async fn set_tx(&mut self, timeout_rtc_steps: u32) -> Result<(), RadioError>;
 
+    /// Start transmission with timeout in milliseconds (convenience wrapper)
+    ///
+    /// # Arguments
+    /// * `timeout_in_ms` - Timeout in milliseconds (converted to RTC steps internally)
+    ///
+    /// # Note
+    /// Use 0 for no timeout (single mode)
+    async fn set_tx_ms(&mut self, timeout_in_ms: u32) -> Result<(), RadioError>;
+
     /// Start reception with timeout
     ///
     /// # Arguments
@@ -582,6 +607,43 @@ pub trait RadioControlExt {
     /// # Note
     /// Use 0xFFFFFF for continuous RX mode
     async fn set_rx(&mut self, timeout_rtc_steps: u32) -> Result<(), RadioError>;
+
+    /// Start reception with timeout in milliseconds (convenience wrapper)
+    ///
+    /// # Arguments
+    /// * `timeout_in_ms` - Timeout in milliseconds (converted to RTC steps internally)
+    ///
+    /// # Note
+    /// Use 0 for continuous RX mode
+    async fn set_rx_ms(&mut self, timeout_in_ms: u32) -> Result<(), RadioError>;
+
+    /// Start reception with LNA mode
+    ///
+    /// # Arguments
+    /// * `timeout_in_ms` - Timeout in milliseconds
+    /// * `lna_mode` - LNA configuration mode
+    async fn set_rx_and_lna_mode(
+        &mut self,
+        timeout_in_ms: u32,
+        lna_mode: LnaMode,
+    ) -> Result<(), RadioError>;
+
+    /// Start reception with timeout in RTC steps and LNA mode
+    ///
+    /// # Arguments
+    /// * `timeout_rtc_step` - Timeout in RTC steps
+    /// * `lna_mode` - LNA configuration mode
+    async fn set_rx_with_timeout_in_rtc_step_and_lna_mode(
+        &mut self,
+        timeout_rtc_step: u32,
+        lna_mode: LnaMode,
+    ) -> Result<(), RadioError>;
+
+    /// Set LNA mode
+    ///
+    /// # Arguments
+    /// * `lna_mode` - LNA configuration (differential, single N, or single P)
+    async fn set_lna_mode(&mut self, lna_mode: LnaMode) -> Result<(), RadioError>;
 
     /// Set LoRa modulation parameters
     ///
@@ -789,6 +851,19 @@ pub trait RadioControlExt {
     /// * `nb_symbols` - Number of symbols for sync timeout
     async fn set_lora_sync_timeout(&mut self, nb_symbols: u8) -> Result<(), RadioError>;
 
+    /// Set LoRa sync timeout with mantissa and exponent (advanced)
+    ///
+    /// # Arguments
+    /// * `mantissa` - Mantissa value (5 bits, 0-31)
+    /// * `exponent` - Exponent value (4 bits, 0-15)
+    ///
+    /// Timeout = mantissa × 2^exponent symbols
+    async fn set_lora_sync_timeout_with_mantissa_exponent(
+        &mut self,
+        mantissa: u8,
+        exponent: u8,
+    ) -> Result<(), RadioError>;
+
     // GFSK Advanced
     /// Set GFSK CRC parameters (seed and polynomial)
     ///
@@ -839,6 +914,25 @@ pub trait RadioControlExt {
     /// # Arguments
     /// * `params` - BPSK packet parameters
     async fn set_bpsk_pkt_params(&mut self, params: &BpskPktParams) -> Result<(), RadioError>;
+
+    // BLE Beacon (LR1110/LR1120 only)
+    /// Configure Bluetooth Low Energy beacon compatibility
+    ///
+    /// # Arguments
+    /// * `channel_id` - BLE channel ID (0-39)
+    /// * `payload` - Beacon payload data
+    async fn cfg_ble_beacon(&mut self, channel_id: u8, payload: &[u8]) -> Result<(), RadioError>;
+
+    /// Configure and send Bluetooth Low Energy beacon
+    ///
+    /// # Arguments
+    /// * `channel_id` - BLE channel ID (0-39)
+    /// * `payload` - Beacon payload data
+    async fn cfg_and_send_ble_beacon(
+        &mut self,
+        channel_id: u8,
+        payload: &[u8],
+    ) -> Result<(), RadioError>;
 
     // Workarounds
     /// Apply high ACP (Adjacent Channel Power) workaround
@@ -952,6 +1046,11 @@ where
         self.execute_command(&cmd).await
     }
 
+    async fn set_tx_ms(&mut self, timeout_in_ms: u32) -> Result<(), RadioError> {
+        let timeout_rtc = convert_time_in_ms_to_rtc_step(timeout_in_ms);
+        self.set_tx(timeout_rtc).await
+    }
+
     async fn set_rx(&mut self, timeout_rtc_steps: u32) -> Result<(), RadioError> {
         // OpCode: 0x82
         let cmd = [
@@ -961,6 +1060,56 @@ where
             timeout_rtc_steps as u8,
         ];
         self.execute_command(&cmd).await
+    }
+
+    async fn set_rx_ms(&mut self, timeout_in_ms: u32) -> Result<(), RadioError> {
+        let timeout_rtc = if timeout_in_ms == 0 {
+            0xFFFFFF // Continuous RX
+        } else {
+            convert_time_in_ms_to_rtc_step(timeout_in_ms)
+        };
+        self.set_rx(timeout_rtc).await
+    }
+
+    async fn set_rx_and_lna_mode(
+        &mut self,
+        timeout_in_ms: u32,
+        lna_mode: LnaMode,
+    ) -> Result<(), RadioError> {
+        // Set LNA mode first
+        self.set_lna_mode(lna_mode).await?;
+        // Then start RX
+        self.set_rx_ms(timeout_in_ms).await
+    }
+
+    async fn set_rx_with_timeout_in_rtc_step_and_lna_mode(
+        &mut self,
+        timeout_rtc_step: u32,
+        lna_mode: LnaMode,
+    ) -> Result<(), RadioError> {
+        // Set LNA mode first
+        self.set_lna_mode(lna_mode).await?;
+        // Then start RX
+        self.set_rx_with_timeout_in_rtc_step(timeout_rtc_step).await
+    }
+
+    async fn set_lna_mode(&mut self, lna_mode: LnaMode) -> Result<(), RadioError> {
+        // This is a register write operation
+        // Based on SWDR001, this writes to a register to configure LNA mode
+        // Register address for LNA mode: 0x00F300C8
+        #[cfg(feature = "regmem")]
+        {
+            #[allow(unused_imports)]
+            use crate::regmem::RegMemExt as _;
+            self.regmem_write_regmem32(0x00F300C8, &[(lna_mode as u32)])
+                .await
+        }
+        #[cfg(not(feature = "regmem"))]
+        {
+            // LNA mode not available without regmem feature
+            let _ = lna_mode;
+            Ok(())
+        }
     }
 
     async fn set_lora_mod_params(
@@ -1392,6 +1541,18 @@ where
         self.execute_command(&cmd).await
     }
 
+    async fn set_lora_sync_timeout_with_mantissa_exponent(
+        &mut self,
+        mantissa: u8,
+        exponent: u8,
+    ) -> Result<(), RadioError> {
+        // OpCode: 0x021B (same as set_lora_sync_timeout, but with mantissa/exponent encoding)
+        // The command format expects mantissa in bits 4-0 and exponent in bits 7-5
+        let encoded_value = (exponent << 5) | (mantissa & 0x1F);
+        let cmd = [0x02, 0x1B, encoded_value];
+        self.execute_command(&cmd).await
+    }
+
     // GFSK Advanced
     async fn set_gfsk_crc_params(&mut self, seed: u32, polynomial: u32) -> Result<(), RadioError> {
         // OpCode: 0x0224
@@ -1489,6 +1650,39 @@ where
             params.pld_len_in_bits as u8,
         ];
         self.execute_command(&cmd).await
+    }
+
+    // BLE Beacon (LR1110/LR1120 only)
+    async fn cfg_ble_beacon(&mut self, channel_id: u8, payload: &[u8]) -> Result<(), RadioError> {
+        // OpCode: 0x022E
+        let mut cmd = [0u8; 2 + 1 + 1 + 255]; // opcode + channel + length + max payload
+        cmd[0] = 0x02;
+        cmd[1] = 0x2E;
+        cmd[2] = channel_id;
+        cmd[3] = payload.len() as u8;
+
+        let len = payload.len().min(255);
+        cmd[4..4 + len].copy_from_slice(&payload[..len]);
+
+        self.execute_command(&cmd[..4 + len]).await
+    }
+
+    async fn cfg_and_send_ble_beacon(
+        &mut self,
+        channel_id: u8,
+        payload: &[u8],
+    ) -> Result<(), RadioError> {
+        // OpCode: 0x0231
+        let mut cmd = [0u8; 2 + 1 + 1 + 255]; // opcode + channel + length + max payload
+        cmd[0] = 0x02;
+        cmd[1] = 0x31;
+        cmd[2] = channel_id;
+        cmd[3] = payload.len() as u8;
+
+        let len = payload.len().min(255);
+        cmd[4..4 + len].copy_from_slice(&payload[..len]);
+
+        self.execute_command(&cmd[..4 + len]).await
     }
 
     // Workarounds

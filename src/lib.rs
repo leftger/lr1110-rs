@@ -162,6 +162,8 @@ pub use radio::{
     // Statistics
     GfskStats,
     IntermediaryMode,
+    // LNA Configuration
+    LnaMode,
     // LoRa
     LoRaNetworkType,
     LoRaPktStatus,
