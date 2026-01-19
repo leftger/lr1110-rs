@@ -416,6 +416,7 @@ where
 
     let mut offset: u32 = 0;
     let mut words_written: usize = 0;
+    let mut last_logged_progress: usize = 0;
 
     while words_written < total_words {
         // Calculate chunk size (max 64 words)
@@ -425,20 +426,35 @@ where
         // Get the chunk data
         let chunk = &firmware_image[words_written..words_written + chunk_size];
 
-        // Write the chunk
-        radio
-            .bootloader_write_flash_encrypted(offset, chunk)
-            .await
-            .map_err(|_| "flash write failed")?;
+        // Write the chunk with retry logic for transient errors
+        let mut retries = 3;
+        loop {
+            match radio.bootloader_write_flash_encrypted(offset, chunk).await {
+                Ok(_) => break,
+                Err(e) if retries > 0 => {
+                    warn!("Flash write failed at offset {} (retries left: {}): {:?}", offset, retries, e);
+                    retries -= 1;
+                    Timer::after(Duration::from_millis(100)).await;
+                }
+                Err(e) => {
+                    error!("Flash write failed permanently at offset {}: {:?}", offset, e);
+                    return Err("flash write failed after retries");
+                }
+            }
+        }
 
         // Update progress
         words_written += chunk_size;
         offset += (chunk_size * 4) as u32;
 
-        // Log progress every 10%
+        // Log progress when crossing 10% boundaries
         let progress = (words_written * 100) / total_words;
-        if progress % 10 == 0 {
+        let progress_decade = progress / 10;
+        let last_decade = last_logged_progress / 10;
+
+        if progress_decade != last_decade || words_written == total_words {
             info!("  Progress: {}% ({}/{} words)", progress, words_written, total_words);
+            last_logged_progress = progress;
         }
     }
 
