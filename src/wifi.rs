@@ -590,7 +590,221 @@ pub trait WifiExt {
     async fn wifi_cfg_timestamp_ap_phone(&mut self, timestamp_s: u32) -> Result<(), RadioError>;
 }
 
-// NOTE: Implementation requires lora-phy to expose low-level SPI interface.
-// This will be implemented once lora-phy adds the Lr1110Interface trait.
-//
-// For now, users can use the types defined above with their own implementation.
+// =============================================================================
+// WiFiExt trait implementation for Lr1110
+// =============================================================================
+
+impl<SPI, IV, C> WifiExt for lora_phy::lr1110::Lr1110<SPI, IV, C>
+where
+    SPI: embedded_hal_async::spi::SpiDevice<u8>,
+    IV: lora_phy::mod_traits::InterfaceVariant,
+    C: lora_phy::lr1110::variant::Lr1110Variant,
+{
+    async fn wifi_scan(
+        &mut self,
+        signal_type: WifiSignalTypeScan,
+        channel_mask: WifiChannelMask,
+        scan_mode: WifiScanMode,
+        max_results: u8,
+        nb_scan_per_channel: u8,
+        timeout_per_scan_ms: u16,
+        abort_on_timeout: bool,
+    ) -> Result<(), RadioError> {
+        let opcode = WifiOpCode::Scan.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            signal_type.value(),
+            (channel_mask >> 8) as u8,
+            (channel_mask & 0xFF) as u8,
+            scan_mode.value(),
+            max_results,
+            nb_scan_per_channel,
+            (timeout_per_scan_ms >> 8) as u8,
+            (timeout_per_scan_ms & 0xFF) as u8,
+            abort_on_timeout as u8,
+        ];
+        self.execute_command(&cmd).await
+    }
+
+    async fn wifi_scan_time_limit(
+        &mut self,
+        signal_type: WifiSignalTypeScan,
+        channel_mask: WifiChannelMask,
+        scan_mode: WifiScanMode,
+        max_results: u8,
+        timeout_per_channel_ms: u16,
+        timeout_total_ms: u16,
+    ) -> Result<(), RadioError> {
+        let opcode = WifiOpCode::ScanTimeLimit.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            signal_type.value(),
+            (channel_mask >> 8) as u8,
+            (channel_mask & 0xFF) as u8,
+            scan_mode.value(),
+            max_results,
+            (timeout_per_channel_ms >> 8) as u8,
+            (timeout_per_channel_ms & 0xFF) as u8,
+            (timeout_total_ms >> 8) as u8,
+            (timeout_total_ms & 0xFF) as u8,
+        ];
+        self.execute_command(&cmd).await
+    }
+
+    async fn wifi_get_nb_results(&mut self) -> Result<u8, RadioError> {
+        let opcode = WifiOpCode::GetResultSize.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 1];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer[0])
+    }
+
+    async fn wifi_read_basic_mac_type_channel_results(
+        &mut self,
+        results: &mut [WifiBasicMacTypeChannelResult],
+        start_index: u8,
+        nb_results: u8,
+    ) -> Result<u8, RadioError> {
+        if nb_results == 0 || results.is_empty() {
+            return Ok(0);
+        }
+
+        let count = nb_results.min(results.len() as u8);
+        let result_size = WIFI_BASIC_MAC_TYPE_CHANNEL_RESULT_SIZE;
+        let total_size = (count as usize) * result_size;
+
+        // Read raw data
+        let opcode = WifiOpCode::ReadResult.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            start_index,
+            count,
+            WifiResultFormat::BasicMacTypeChannel.format_code(),
+        ];
+
+        // Use a stack buffer for reading (max 32 results * 9 bytes = 288 bytes)
+        let mut buffer = [0u8; 288];
+        self.execute_command_with_response(&cmd, &mut buffer[..total_size]).await?;
+
+        // Parse results
+        for (i, result) in results.iter_mut().enumerate().take(count as usize) {
+            let offset = i * result_size;
+            result.data_rate_info_byte = buffer[offset];
+            result.channel_info_byte = buffer[offset + 1];
+            result.rssi = buffer[offset + 2] as i8;
+            result.mac_address.copy_from_slice(&buffer[offset + 3..offset + 9]);
+        }
+
+        Ok(count)
+    }
+
+    async fn wifi_read_basic_complete_results(
+        &mut self,
+        results: &mut [WifiBasicCompleteResult],
+        start_index: u8,
+        nb_results: u8,
+    ) -> Result<u8, RadioError> {
+        if nb_results == 0 || results.is_empty() {
+            return Ok(0);
+        }
+
+        let count = nb_results.min(results.len() as u8);
+        let result_size = WIFI_BASIC_COMPLETE_RESULT_SIZE;
+        let total_size = (count as usize) * result_size;
+
+        // Read raw data
+        let opcode = WifiOpCode::ReadResult.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            start_index,
+            count,
+            WifiResultFormat::BasicComplete.format_code(),
+        ];
+
+        // Use stack buffer (max 32 results * 22 bytes = 704 bytes)
+        let mut buffer = [0u8; 704];
+        self.execute_command_with_response(&cmd, &mut buffer[..total_size]).await?;
+
+        // Parse results
+        for (i, result) in results.iter_mut().enumerate().take(count as usize) {
+            let offset = i * result_size;
+            result.data_rate_info_byte = buffer[offset];
+            result.channel_info_byte = buffer[offset + 1];
+            result.rssi = buffer[offset + 2] as i8;
+            result.frame_type_info_byte = buffer[offset + 3];
+            result.mac_address.copy_from_slice(&buffer[offset + 4..offset + 10]);
+            result.phi_offset = ((buffer[offset + 10] as i16) << 8) | (buffer[offset + 11] as i16);
+            result.timestamp_us = ((buffer[offset + 12] as u64) << 56)
+                | ((buffer[offset + 13] as u64) << 48)
+                | ((buffer[offset + 14] as u64) << 40)
+                | ((buffer[offset + 15] as u64) << 32)
+                | ((buffer[offset + 16] as u64) << 24)
+                | ((buffer[offset + 17] as u64) << 16)
+                | ((buffer[offset + 18] as u64) << 8)
+                | (buffer[offset + 19] as u64);
+            result.beacon_period_tu = ((buffer[offset + 20] as u16) << 8) | (buffer[offset + 21] as u16);
+        }
+
+        Ok(count)
+    }
+
+    async fn wifi_read_cumulative_timing(&mut self) -> Result<WifiCumulativeTimings, RadioError> {
+        let opcode = WifiOpCode::ReadCumulTiming.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; WIFI_ALL_CUMULATIVE_TIMING_SIZE];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+
+        Ok(WifiCumulativeTimings {
+            rx_detection_us: ((rbuffer[0] as u32) << 24)
+                | ((rbuffer[1] as u32) << 16)
+                | ((rbuffer[2] as u32) << 8)
+                | (rbuffer[3] as u32),
+            rx_correlation_us: ((rbuffer[4] as u32) << 24)
+                | ((rbuffer[5] as u32) << 16)
+                | ((rbuffer[6] as u32) << 8)
+                | (rbuffer[7] as u32),
+            rx_capture_us: ((rbuffer[8] as u32) << 24)
+                | ((rbuffer[9] as u32) << 16)
+                | ((rbuffer[10] as u32) << 8)
+                | (rbuffer[11] as u32),
+            demodulation_us: ((rbuffer[12] as u32) << 24)
+                | ((rbuffer[13] as u32) << 16)
+                | ((rbuffer[14] as u32) << 8)
+                | (rbuffer[15] as u32),
+        })
+    }
+
+    async fn wifi_reset_cumulative_timing(&mut self) -> Result<(), RadioError> {
+        let opcode = WifiOpCode::ResetCumulTiming.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.execute_command(&cmd).await
+    }
+
+    async fn wifi_read_version(&mut self) -> Result<WifiVersion, RadioError> {
+        let opcode = WifiOpCode::GetVersion.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; WIFI_VERSION_SIZE];
+        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
+        Ok(WifiVersion {
+            major: rbuffer[0],
+            minor: rbuffer[1],
+        })
+    }
+
+    async fn wifi_cfg_timestamp_ap_phone(&mut self, timestamp_s: u32) -> Result<(), RadioError> {
+        let opcode = WifiOpCode::ConfigureTimestampApPhone.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (timestamp_s >> 24) as u8,
+            (timestamp_s >> 16) as u8,
+            (timestamp_s >> 8) as u8,
+            timestamp_s as u8,
+        ];
+        self.execute_command(&cmd).await
+    }
+}

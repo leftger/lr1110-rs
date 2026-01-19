@@ -45,6 +45,20 @@ pub use lora_phy::mod_params::RadioError;
 pub use lora_phy::mod_traits::InterfaceVariant;
 
 // =============================================================================
+// Interface Variant for boards with BUSY pin connected
+// =============================================================================
+
+/// InterfaceVariant implementation for LR1110 with BUSY pin support.
+///
+/// This module provides a generic InterfaceVariant that properly waits for the
+/// BUSY pin, which is essential for correct LR1110 operation on boards where
+/// the BUSY pin is connected.
+///
+/// Use this on any platform (STM32, NRF52, RP2040, etc.) where you have the
+/// LR1110 BUSY pin wired to a GPIO.
+pub mod iv;
+
+// =============================================================================
 // Feature-gated modules
 // =============================================================================
 

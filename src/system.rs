@@ -37,6 +37,7 @@ use lora_phy::mod_traits::InterfaceVariant;
 
 /// System OpCodes (16-bit commands for LR1110)
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 enum SystemOpCode {
     GetErrors = 0x010D,
     ClearErrors = 0x010E,
@@ -154,14 +155,6 @@ pub trait SystemExt {
 
     /// Read the Join EUI (8 bytes) - for LoRaWAN
     async fn read_join_eui(&mut self) -> Result<[u8; LR11XX_SYSTEM_JOIN_EUI_LENGTH], RadioError>;
-
-    /// Get system errors
-    ///
-    /// Returns a bitmask of error flags that have occurred.
-    async fn get_errors(&mut self) -> Result<SystemErrors, RadioError>;
-
-    /// Clear system errors
-    async fn clear_errors(&mut self) -> Result<(), RadioError>;
 }
 
 // =============================================================================
@@ -220,21 +213,5 @@ where
         self.execute_command_with_response(&cmd, &mut rbuffer).await?;
 
         Ok(rbuffer)
-    }
-
-    async fn get_errors(&mut self) -> Result<SystemErrors, RadioError> {
-        let opcode = SystemOpCode::GetErrors.bytes();
-        let cmd = [opcode[0], opcode[1]];
-        let mut rbuffer = [0u8; 2];
-        self.execute_command_with_response(&cmd, &mut rbuffer).await?;
-
-        let raw = ((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16);
-        Ok(SystemErrors::from(raw))
-    }
-
-    async fn clear_errors(&mut self) -> Result<(), RadioError> {
-        let opcode = SystemOpCode::ClearErrors.bytes();
-        let cmd = [opcode[0], opcode[1]];
-        self.execute_command(&cmd).await
     }
 }
