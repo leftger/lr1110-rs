@@ -28,7 +28,7 @@
 //! - SPI2_MISO: PA9
 //! - SPI2_MOSI: PC3
 //! - SPI2_NSS:  PD14
-//! - LR1110_RESET: PB2
+//! - LR1110_RESET: PA4 (LR1110_NRESET)
 //! - LR1110_BUSY:  PB13
 //! - LR1110_DIO1:  PB14
 //!
@@ -52,7 +52,7 @@ mod firmware;
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::exti::ExtiInput;
-use embassy_stm32::gpio::{Level, Output, Pull, Speed};
+use embassy_stm32::gpio::{Flex, Level, Output, Pull, Speed};
 use embassy_stm32::rcc::{
     AHB5Prescaler, AHBPrescaler, APBPrescaler, PllDiv, PllMul, PllPreDiv, PllSource, Sysclk, VoltageScale,
 };
@@ -64,7 +64,6 @@ use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::radio_kind_params::Version;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, BootloaderVersion, TcxoCtrlVoltage, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS};
-use lr1110_rs::iv::Lr1110InterfaceVariant;
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
@@ -204,17 +203,56 @@ async fn main(_spawner: Spawner) {
     let nss = Output::new(p.PD14, Level::High, Speed::VeryHigh);
     let spi_device = ExclusiveDevice::new(spi, nss, Delay).unwrap();
 
-    // Configure LR1110 control pins
-    let reset = Output::new(p.PB2, Level::High, Speed::Low);
-    let busy = ExtiInput::new(p.PB13, p.EXTI13, Pull::None, Irqs);
+    // =========================================================================
+    // CRITICAL: Enter Bootloader Mode using SWTL001 BUSY pin manipulation
+    // =========================================================================
+    // The LR1110 enters bootloader mode only when BUSY is held LOW during reset.
+    // Without this, it boots into firmware mode and firmware updates fail.
+    //
+    // Reference: SWTL001 lr11xx_firmware_update.c:95-101
+    // =========================================================================
+
+    info!("Entering bootloader mode...");
+
+    let mut reset = Output::new(p.PA4, Level::High, Speed::Low);
+    let mut busy = Flex::new(p.PB13);
+
+    // Step 1: Force BUSY pin to OUTPUT LOW (critical for bootloader entry)
+    busy.set_as_output(Speed::Low);
+    busy.set_low();
+    Timer::after(Duration::from_millis(1)).await;
+
+    // Step 2: Perform hardware reset
+    reset.set_low();
+    Timer::after(Duration::from_millis(1)).await;
+    reset.set_high();
+
+    // Step 3: Wait 500ms for chip to start initializing
+    Timer::after(Duration::from_millis(500)).await;
+
+    // Step 4: Release BUSY pin back to INPUT (chip can now control it)
+    busy.set_as_input(Pull::None);
+
+    // Step 5: Wait for BUSY to go low (chip ready) + additional stabilization
+    while busy.is_high() {
+        Timer::after(Duration::from_micros(100)).await;
+    }
+    Timer::after(Duration::from_millis(100)).await;
+
+    info!("Bootloader entry sequence complete");
+
+    // Now configure other pins for radio operation
+    // Note: We keep BUSY as Flex since it was used for bootloader entry
     let dio1 = ExtiInput::new(p.PB14, p.EXTI14, Pull::Down, Irqs);
 
     // Optional RF switch control pins
     let rf_switch_rx: Option<Output<'_>> = None;
     let rf_switch_tx: Option<Output<'_>> = None;
 
-    // Create InterfaceVariant
-    let iv = Lr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
+    // Create a custom InterfaceVariant using Flex for BUSY
+    // We use a type alias to match the expected types
+    use lr1110_rs::iv::Lr1110InterfaceVariantFlex;
+    let iv = Lr1110InterfaceVariantFlex::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
@@ -291,22 +329,10 @@ where
     C: lora_phy::lr1110::variant::Lr1110Variant,
 {
     // ========================================================================
-    // Step 1: Reset chip and enter bootloader mode
+    // Step 1: Read and validate bootloader version
     // ========================================================================
-    info!("Step 1: Resetting chip to enter bootloader mode...");
-
-    // Set standby mode first
-    radio.set_standby_mode(false).await.map_err(|_| "standby failed")?;
-    Timer::after(Duration::from_millis(10)).await;
-
-    // The chip should be in bootloader mode after reset
-    // Wait for it to stabilize
-    Timer::after(Duration::from_millis(500)).await;
-
-    // ========================================================================
-    // Step 2: Read and validate bootloader version
-    // ========================================================================
-    info!("Step 2: Reading bootloader version...");
+    // Note: Bootloader entry was already performed before creating the radio
+    info!("Step 1: Reading bootloader version...");
 
     let bootloader_version: BootloaderVersion = radio
         .bootloader_get_version()
@@ -339,9 +365,9 @@ where
     info!("  Bootloader version validated OK");
 
     // ========================================================================
-    // Step 3: Read device identifiers (for logging)
+    // Step 2: Read device identifiers (for logging)
     // ========================================================================
-    info!("Step 3: Reading device identifiers...");
+    info!("Step 2: Reading device identifiers...");
 
     match radio.bootloader_read_pin().await {
         Ok(pin) => info!("  PIN: {:02X}{:02X}{:02X}{:02X}", pin[0], pin[1], pin[2], pin[3]),
@@ -365,9 +391,9 @@ where
     }
 
     // ========================================================================
-    // Step 4: Erase flash memory
+    // Step 3: Erase flash memory
     // ========================================================================
-    info!("Step 4: Erasing flash memory...");
+    info!("Step 3: Erasing flash memory...");
     info!("  This may take a few seconds...");
 
     radio.bootloader_erase_flash().await.map_err(|_| "flash erase failed")?;
@@ -378,9 +404,9 @@ where
     info!("  Flash erased successfully");
 
     // ========================================================================
-    // Step 5: Write firmware image
+    // Step 4: Write firmware image
     // ========================================================================
-    info!("Step 5: Writing firmware image...");
+    info!("Step 4: Writing firmware image...");
 
     let total_words = firmware_image.len();
     let total_chunks = (total_words + BOOTLOADER_FLASH_BLOCK_SIZE_WORDS - 1) / BOOTLOADER_FLASH_BLOCK_SIZE_WORDS;
@@ -419,9 +445,9 @@ where
     info!("  Firmware written successfully");
 
     // ========================================================================
-    // Step 6: Reboot and verify
+    // Step 5: Reboot and verify
     // ========================================================================
-    info!("Step 6: Rebooting to execute new firmware...");
+    info!("Step 5: Rebooting to execute new firmware...");
 
     // Reboot and exit bootloader (run from flash)
     radio.bootloader_reboot(false).await.map_err(|_| "reboot failed")?;
@@ -429,7 +455,7 @@ where
     // Wait for chip to boot and initialize
     Timer::after(Duration::from_millis(2000)).await;
 
-    info!("Step 7: Verifying firmware version...");
+    info!("Step 6: Verifying firmware version...");
 
     // Read the new firmware version
     let version: Version = radio

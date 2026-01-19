@@ -12,7 +12,7 @@
 //! - SPI2_MISO: PA9
 //! - SPI2_MOSI: PC3
 //! - SPI2_NSS:  PD14 (manual control via GPIO)
-//! - LR1110_RESET: PB2
+//! - LR1110_RESET: PA4 (LR1110_NRESET)
 //! - LR1110_BUSY:  PB13 (BUSY signal, active high)
 //! - LR1110_DIO1:  PB14 (with EXTI interrupt)
 
@@ -92,7 +92,7 @@ async fn main(_spawner: Spawner) {
     let spi_device = ExclusiveDevice::new(spi, nss, Delay).unwrap();
 
     // Configure LR1110 control pins
-    let reset = Output::new(p.PB2, Level::High, Speed::Low);
+    let reset = Output::new(p.PA4, Level::High, Speed::Low);
     let busy = ExtiInput::new(p.PB13, p.EXTI13, Pull::None, Irqs);
     let dio1 = ExtiInput::new(p.PB14, p.EXTI14, Pull::Down, Irqs);
 

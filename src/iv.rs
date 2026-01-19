@@ -138,3 +138,134 @@ where
         Ok(())
     }
 }
+
+/// InterfaceVariant for LR1110 using Flex pin for BUSY
+///
+/// This variant is specifically for firmware updates where the BUSY pin needs
+/// to be manipulated (OUTPUT/INPUT) during bootloader entry. It uses polling
+/// instead of EXTI interrupts for BUSY pin monitoring.
+///
+/// Note: This is less efficient than the standard InterfaceVariant but necessary
+/// for bootloader entry per SWTL001 specification.
+pub struct Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
+where
+    RESET: OutputPin,
+    BUSY: InputPin,
+    DIO1: Wait,
+    CTRL: OutputPin,
+{
+    reset: RESET,
+    busy: BUSY,
+    dio1: DIO1,
+    rf_switch_rx: Option<CTRL>,
+    rf_switch_tx: Option<CTRL>,
+}
+
+impl<RESET, BUSY, DIO1, CTRL> Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
+where
+    RESET: OutputPin,
+    BUSY: InputPin,
+    DIO1: Wait,
+    CTRL: OutputPin,
+{
+    /// Create a new InterfaceVariant for LR1110 with Flex BUSY pin
+    ///
+    /// # Arguments
+    /// * `reset` - GPIO output pin connected to LR1110 RESET
+    /// * `busy` - Flex GPIO pin connected to LR1110 BUSY (DIO0) - active high when processing
+    /// * `dio1` - GPIO input pin connected to LR1110 DIO1 (IRQ)
+    /// * `rf_switch_rx` - Optional GPIO output for RX antenna switch
+    /// * `rf_switch_tx` - Optional GPIO output for TX antenna switch
+    pub fn new(
+        reset: RESET,
+        busy: BUSY,
+        dio1: DIO1,
+        rf_switch_rx: Option<CTRL>,
+        rf_switch_tx: Option<CTRL>,
+    ) -> Result<Self, RadioError> {
+        Ok(Self {
+            reset,
+            busy,
+            dio1,
+            rf_switch_rx,
+            rf_switch_tx,
+        })
+    }
+}
+
+impl<RESET, BUSY, DIO1, CTRL> InterfaceVariant for Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
+where
+    RESET: OutputPin,
+    BUSY: InputPin,
+    DIO1: Wait,
+    CTRL: OutputPin,
+{
+    async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError> {
+        // LR1110 reset sequence:
+        // 1. Set RESET low for at least 50us
+        // 2. Wait for BUSY to go low (chip ready)
+        // 3. Set RESET high
+        // 4. Wait for BUSY to go low again (chip ready after reset)
+        delay.delay_ms(1).await;
+        self.reset.set_low().map_err(|_| Reset)?;
+        delay.delay_ms(10).await;
+        self.reset.set_high().map_err(|_| Reset)?;
+        // Wait for chip to be ready after reset (poll since Flex doesn't support Wait)
+        while self.busy.is_high().map_err(|_| Busy)? {
+            delay.delay_us(100).await;
+        }
+        Ok(())
+    }
+
+    async fn wait_on_busy(&mut self) -> Result<(), RadioError> {
+        // LR1110 BUSY pin (DIO0) is high when processing a command
+        // Wait for it to go low before sending next command
+        // Poll since Flex doesn't support Wait trait
+        while self.busy.is_high().map_err(|_| Busy)? {
+            // Small delay to avoid busy-looping
+            // In a real async executor, this yields to other tasks
+            core::future::ready(()).await;
+        }
+        Ok(())
+    }
+
+    async fn await_irq(&mut self) -> Result<(), RadioError> {
+        self.dio1.wait_for_high().await.map_err(|_| DIO1)?;
+        Ok(())
+    }
+
+    async fn enable_rf_switch_rx(&mut self) -> Result<(), RadioError> {
+        // Disable TX switch
+        if let Some(pin) = &mut self.rf_switch_tx {
+            pin.set_low().map_err(|_| RfSwitchTx)?;
+        }
+        // Enable RX switch
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_high().map_err(|_| RfSwitchRx)?;
+        }
+        Ok(())
+    }
+
+    async fn enable_rf_switch_tx(&mut self) -> Result<(), RadioError> {
+        // Disable RX switch
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?;
+        }
+        // Enable TX switch
+        if let Some(pin) = &mut self.rf_switch_tx {
+            pin.set_high().map_err(|_| RfSwitchTx)?;
+        }
+        Ok(())
+    }
+
+    async fn disable_rf_switch(&mut self) -> Result<(), RadioError> {
+        // Disable both switches
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?;
+        }
+        if let Some(pin) = &mut self.rf_switch_tx {
+            pin.set_low().map_err(|_| RfSwitchTx)?;
+        }
+        Ok(())
+    }
+}
