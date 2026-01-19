@@ -53,6 +53,7 @@ use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use lr1110_rs::iv::Lr1110InterfaceVariant;
 use lr1110_rs::gnss::{GnssExt, GnssDetectedSatellite, GNSS_BEIDOU_MASK, GNSS_GPS_MASK, GNSS_SINGLE_ALMANAC_READ_SIZE, GnssAssistancePosition, GnssDestination, GnssSearchMode};
+use lr1110_rs::system::{SystemExt, StandbyConfig, RfSwitchConfig, RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH, IRQ_GNSS_SCAN_DONE};
 use {defmt_rtt as _, panic_probe as _};
 
 // ============================================================================
@@ -200,25 +201,83 @@ async fn main(_spawner: Spawner) {
     info!("Configuring TCXO and calibrating...");
     radio.init_system().await.unwrap();
 
-    // Configure RF switches for E516V02B/E516V03A board:
-    // - RFSW0 (DIO5, 0x01): Sub-GHz RX path
-    // - RFSW1 (DIO6, 0x02): Sub-GHz TX path
-    // - RFSW2 (DIO7, 0x04): GNSS LNA enable (BGA524N6)
-    // - RFSW3 (DIO8, 0x08): WiFi LNA enable (if present)
+    // Read chip version and system status
+    info!("-------------------------------------------");
+    info!("Chip Information:");
+    match radio.get_version().await {
+        Ok(version) => {
+            info!("  Hardware: 0x{:02X}", version.hw);
+            info!("  Chip type: {:?}", version.chip_type);
+            info!("  Firmware: 0x{:04X}", version.fw);
+        }
+        Err(e) => {
+            error!("  Failed to read version: {:?}", e);
+        }
+    }
+
+    // Display system diagnostics
+    match radio.get_temp().await {
+        Ok(temp) => {
+            // Convert raw value to Celsius (approximation)
+            let temp_c = (temp as i16) - 273;
+            info!("  Temperature: ~{}°C (raw: {})", temp_c, temp);
+        }
+        Err(e) => {
+            warn!("  Failed to read temperature: {:?}", e);
+        }
+    }
+
+    match radio.get_vbat().await {
+        Ok(vbat) => {
+            info!("  Battery voltage (raw): {}", vbat);
+        }
+        Err(e) => {
+            warn!("  Failed to read battery voltage: {:?}", e);
+        }
+    }
+
+    // Check for system errors using SystemExt
+    match SystemExt::get_errors(&mut radio).await {
+        Ok(errors) => {
+            if errors.has_errors() {
+                warn!("  System errors detected: 0x{:04X}", errors.raw);
+                if errors.lf_rc_calib_error() {
+                    warn!("    - LF RC calibration error");
+                }
+                if errors.hf_rc_calib_error() {
+                    warn!("    - HF RC calibration error");
+                }
+                if errors.pll_calib_error() {
+                    warn!("    - PLL calibration error");
+                }
+                // Clear errors after reporting
+                let _ = SystemExt::clear_errors(&mut radio).await;
+            } else {
+                info!("  System status: OK (no errors)");
+            }
+        }
+        Err(e) => {
+            warn!("  Failed to read system errors: {:?}", e);
+        }
+    }
+
+    // Configure RF switches for E516V02B/E516V03A board using new RfSwitchConfig:
+    // - RFSW0 (DIO5): Sub-GHz RX path
+    // - RFSW1 (DIO6): Sub-GHz TX path
+    // - RFSW2 (DIO7): GNSS LNA enable (BGA524N6)
+    // - RFSW3 (DIO8): WiFi LNA enable (if present)
     info!("Configuring RF switches for GNSS LNA...");
-    radio
-        .set_dio_as_rf_switch(
-            true, // enable
-            0x00, // standby: no switches active
-            0x01, // rx: RFSW0 (DIO5)
-            0x03, // tx: RFSW0 + RFSW1 (DIO5 + DIO6)
-            0x02, // tx_hp: RFSW1 (DIO6)
-            0x00, // tx_hf: none
-            0x04, // gnss: RFSW2 (DIO7) - enables BGA524N6 LNA
-            0x08, // wifi: RFSW3 (DIO8)
-        )
-        .await
-        .unwrap();
+    let rf_switch_cfg = RfSwitchConfig {
+        enable: 0xFF,                    // Enable all switches
+        standby: 0x00,                   // Standby: no switches active
+        rx: RFSW0_HIGH,                  // RX: RFSW0 (DIO5)
+        tx: RFSW0_HIGH | RFSW1_HIGH,     // TX: RFSW0 + RFSW1
+        tx_hp: RFSW1_HIGH,               // TX HP: RFSW1 (DIO6)
+        tx_hf: 0x00,                     // TX HF: none
+        gnss: RFSW2_HIGH,                // GNSS: RFSW2 (DIO7) - BGA524N6 LNA
+        wifi: RFSW3_HIGH,                // WiFi: RFSW3 (DIO8)
+    };
+    SystemExt::set_dio_as_rf_switch(&mut radio, &rf_switch_cfg).await.unwrap();
 
     // Read GNSS firmware version
     info!("-------------------------------------------");
@@ -400,10 +459,30 @@ async fn main(_spawner: Spawner) {
 
         info!("  Scan started, waiting for completion...");
 
-        // Wait for scan to complete
-        // In a real application, you would wait for the GnssScanDone IRQ
-        // For simplicity, we use a timeout here
-        embassy_time::Timer::after_secs(10).await;
+        // Clear any previous IRQs
+        let _ = SystemExt::clear_irq_status(&mut radio, IRQ_GNSS_SCAN_DONE).await;
+
+        // Wait for scan to complete by polling IRQ status
+        // In a production application, you would use DIO1 interrupt
+        let mut scan_done = false;
+        for _ in 0..50 {
+            // Poll every 200ms for up to 10 seconds
+            embassy_time::Timer::after_millis(200).await;
+
+            if let Ok(irq_status) = SystemExt::get_irq_status(&mut radio).await {
+                if irq_status & IRQ_GNSS_SCAN_DONE != 0 {
+                    info!("  GNSS scan completed (IRQ detected)");
+                    // Clear the IRQ
+                    let _ = SystemExt::clear_irq_status(&mut radio, IRQ_GNSS_SCAN_DONE).await;
+                    scan_done = true;
+                    break;
+                }
+            }
+        }
+
+        if !scan_done {
+            warn!("  GNSS scan timeout (no IRQ received)");
+        }
 
         // Get result size
         let result_size = match radio.gnss_get_result_size().await {
@@ -570,7 +649,16 @@ async fn main(_spawner: Spawner) {
         } else {
             // No interleaved update, just wait before next scan
             info!("  Waiting 30 seconds before next scan...");
+            // Enter standby mode to save power during wait
+            if let Err(e) = SystemExt::set_standby(&mut radio, StandbyConfig::RC).await {
+                warn!("  Failed to enter standby: {:?}", e);
+            }
             embassy_time::Timer::after_secs(30).await;
+        }
+
+        // Enter standby mode between scans to save power
+        if let Err(e) = SystemExt::set_standby(&mut radio, StandbyConfig::RC).await {
+            warn!("  Failed to enter standby: {:?}", e);
         }
     }
 }
