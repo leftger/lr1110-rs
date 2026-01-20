@@ -41,8 +41,8 @@ use lr1110_rs::system::{
     RFSW0_HIGH, RFSW1_HIGH, RFSW2_HIGH, RFSW3_HIGH,
 };
 use lr1110_rs::wifi::{
-    WifiBasicMacTypeChannelResult, WifiExt, WifiScanMode, WifiSignalTypeScan,
-    WIFI_ALL_CHANNELS_MASK, WIFI_MAX_RESULTS,
+    WifiExt, WifiExtendedFullResult, WifiScanMode, WifiSignalTypeScan, WIFI_ALL_CHANNELS_MASK,
+    WIFI_MAX_RESULTS,
 };
 use {defmt_rtt as _, panic_probe as _};
 
@@ -254,7 +254,7 @@ async fn main(_spawner: Spawner) {
         // Launch WiFi scan
         // - TypeBGN: Scan for all WiFi types (802.11 b/g/n)
         // - ALL_CHANNELS_MASK: Scan all 14 channels
-        // - Beacon: Basic scan mode for Beacons and Probe Responses
+        // - UntilSsid: Extended scan mode that demodulates until SSID field (requires firmware 0x0306+)
         // - max_results: 32 (maximum allowed, range is 1-32, 0 is forbidden!)
         // - nb_scan_per_channel: 10 scans per channel
         // - timeout_per_scan_ms: 90ms per scan
@@ -263,7 +263,7 @@ async fn main(_spawner: Spawner) {
             .wifi_scan(
                 WifiSignalTypeScan::TypeBGN,
                 WIFI_ALL_CHANNELS_MASK,
-                WifiScanMode::Beacon,
+                WifiScanMode::UntilSsid,
                 32,    // max_results (range 1-32, 0 is forbidden!)
                 10,    // nb_scan_per_channel
                 90,    // timeout_per_scan_ms
@@ -303,10 +303,10 @@ async fn main(_spawner: Spawner) {
             continue;
         }
 
-        // Read results
-        let mut results = [WifiBasicMacTypeChannelResult::default(); WIFI_MAX_RESULTS];
+        // Read results in extended full format
+        let mut results = [WifiExtendedFullResult::default(); WIFI_MAX_RESULTS];
         let read_count = match radio
-            .wifi_read_basic_mac_type_channel_results(
+            .wifi_read_extended_full_results(
                 &mut results,
                 0,
                 nb_results.min(WIFI_MAX_RESULTS as u8),
@@ -321,34 +321,72 @@ async fn main(_spawner: Spawner) {
             }
         };
 
-        // Display results
+        // Display extended results
         info!("  Results:");
         for i in 0..read_count as usize {
             let result = &results[i];
-            let mac = result.mac_address;
-            let channel = result.channel();
-            let rssi = result.rssi;
-            let signal_type = result.signal_type();
-            let rssi_valid = if result.rssi_valid() {
-                ""
-            } else {
-                " (invalid)"
-            };
 
+            info!("    --- AP {} ---", i + 1);
+
+            // SSID (if available)
+            if let Some(ssid) = result.ssid_str() {
+                info!("      SSID: \"{}\"", ssid);
+            } else {
+                info!("      SSID: (not available or invalid UTF-8)");
+            }
+
+            // MAC addresses
+            let mac1 = result.mac_address_1;
+            let mac2 = result.mac_address_2;
+            let mac3 = result.mac_address_3;
             info!(
-                "    AP {}: MAC={:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} Ch={:?} RSSI={}dBm{} Type={:?}",
-                i + 1,
-                mac[0],
-                mac[1],
-                mac[2],
-                mac[3],
-                mac[4],
-                mac[5],
-                channel,
-                rssi,
-                rssi_valid,
-                signal_type
+                "      MAC 1: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                mac1[0], mac1[1], mac1[2], mac1[3], mac1[4], mac1[5]
             );
+            info!(
+                "      MAC 2: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                mac2[0], mac2[1], mac2[2], mac2[3], mac2[4], mac2[5]
+            );
+            info!(
+                "      MAC 3: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                mac3[0], mac3[1], mac3[2], mac3[3], mac3[4], mac3[5]
+            );
+
+            // Channel and RSSI
+            let channel = result.channel();
+            info!("      Channel (scan): {:?}", channel);
+            info!("      Channel (frame): {:?}", result.current_channel);
+            info!("      RSSI: {} dBm", result.rssi);
+            info!("      Signal type: {:?}", result.signal_type());
+
+            // Country code
+            if result.country_code[0] != 0 || result.country_code[1] != 0 {
+                info!(
+                    "      Country code: {}{}",
+                    result.country_code[0] as char, result.country_code[1] as char
+                );
+            }
+
+            // Frame information
+            info!("      Frame control: 0x{:04X}", result.frame_control);
+            info!("      Sequence control: 0x{:04X}", result.seq_control);
+            info!("      Rate: {}", result.rate);
+            info!("      Service: 0x{:04X}", result.service);
+            info!("      Length: {}", result.length);
+            info!("      Beacon period: {} TU", result.beacon_period_tu);
+            info!("      Timestamp: {} us", result.timestamp_us);
+
+            // FCS information
+            info!(
+                "      FCS checked: {}, FCS OK: {}",
+                result.fcs_check_byte.is_fcs_checked, result.fcs_check_byte.is_fcs_ok
+            );
+
+            // Other fields
+            if result.io_regulation != 0 {
+                info!("      IO regulation: {}", result.io_regulation);
+            }
+            info!("      Phi offset: {}", result.phi_offset);
         }
 
         // Read cumulative timing

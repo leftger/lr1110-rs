@@ -577,6 +577,15 @@ pub trait WifiExt {
         nb_results: u8,
     ) -> Result<u8, RadioError>;
 
+    /// Read WiFi scan results in extended full format (79 bytes per result)
+    /// Provides complete frame information including SSID, country codes, FCS status, and more
+    async fn wifi_read_extended_full_results(
+        &mut self,
+        results: &mut [WifiExtendedFullResult],
+        start_index: u8,
+        nb_results: u8,
+    ) -> Result<u8, RadioError>;
+
     /// Read cumulative WiFi scan timing information
     async fn wifi_read_cumulative_timing(&mut self) -> Result<WifiCumulativeTimings, RadioError>;
 
@@ -763,6 +772,106 @@ where
                 | (buffer[offset + 19] as u64);
             result.beacon_period_tu =
                 ((buffer[offset + 20] as u16) << 8) | (buffer[offset + 21] as u16);
+        }
+
+        Ok(count)
+    }
+
+    async fn wifi_read_extended_full_results(
+        &mut self,
+        results: &mut [WifiExtendedFullResult],
+        start_index: u8,
+        nb_results: u8,
+    ) -> Result<u8, RadioError> {
+        if nb_results == 0 || results.is_empty() {
+            return Ok(0);
+        }
+
+        let count = nb_results.min(results.len() as u8);
+        let result_size = WIFI_EXTENDED_COMPLETE_RESULT_SIZE;
+        let total_size = (count as usize) * result_size;
+
+        // Read raw data
+        let opcode = WifiOpCode::ReadResult.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            start_index,
+            count,
+            WifiResultFormat::ExtendedFull.format_code(),
+        ];
+
+        // Use stack buffer (max 32 results * 79 bytes = 2,528 bytes)
+        let mut buffer = [0u8; 2528];
+        self.execute_command_with_response(&cmd, &mut buffer[..total_size])
+            .await?;
+
+        // Parse results according to SWDR001 byte layout
+        for (i, result) in results.iter_mut().enumerate().take(count as usize) {
+            let offset = i * result_size;
+
+            // Bytes 0-2: data_rate_info_byte, channel_info_byte, rssi
+            result.data_rate_info_byte = buffer[offset];
+            result.channel_info_byte = buffer[offset + 1];
+            result.rssi = buffer[offset + 2] as i8;
+
+            // Byte 3: rate
+            result.rate = buffer[offset + 3];
+
+            // Bytes 4-5: service (u16, big-endian)
+            result.service = ((buffer[offset + 4] as u16) << 8) | (buffer[offset + 5] as u16);
+
+            // Bytes 6-7: length (u16, big-endian)
+            result.length = ((buffer[offset + 6] as u16) << 8) | (buffer[offset + 7] as u16);
+
+            // Bytes 8-9: frame_control (u16, big-endian)
+            result.frame_control = ((buffer[offset + 8] as u16) << 8) | (buffer[offset + 9] as u16);
+
+            // Bytes 10-15: mac_address_1 (6 bytes)
+            result.mac_address_1.copy_from_slice(&buffer[offset + 10..offset + 16]);
+
+            // Bytes 16-21: mac_address_2 (6 bytes)
+            result.mac_address_2.copy_from_slice(&buffer[offset + 16..offset + 22]);
+
+            // Bytes 22-27: mac_address_3 (6 bytes)
+            result.mac_address_3.copy_from_slice(&buffer[offset + 22..offset + 28]);
+
+            // Bytes 28-35: timestamp_us (u64, big-endian)
+            result.timestamp_us = ((buffer[offset + 28] as u64) << 56)
+                | ((buffer[offset + 29] as u64) << 48)
+                | ((buffer[offset + 30] as u64) << 40)
+                | ((buffer[offset + 31] as u64) << 32)
+                | ((buffer[offset + 32] as u64) << 24)
+                | ((buffer[offset + 33] as u64) << 16)
+                | ((buffer[offset + 34] as u64) << 8)
+                | (buffer[offset + 35] as u64);
+
+            // Bytes 36-37: beacon_period_tu (u16, big-endian)
+            result.beacon_period_tu = ((buffer[offset + 36] as u16) << 8) | (buffer[offset + 37] as u16);
+
+            // Bytes 38-39: seq_control (u16, big-endian)
+            result.seq_control = ((buffer[offset + 38] as u16) << 8) | (buffer[offset + 39] as u16);
+
+            // Bytes 40-71: ssid_bytes (32 bytes)
+            result.ssid_bytes.copy_from_slice(&buffer[offset + 40..offset + 72]);
+
+            // Byte 72: current_channel
+            result.current_channel = WifiChannel::from(buffer[offset + 72]);
+
+            // Bytes 73-74: country_code (2 bytes)
+            result.country_code.copy_from_slice(&buffer[offset + 73..offset + 75]);
+
+            // Byte 75: io_regulation
+            result.io_regulation = buffer[offset + 75];
+
+            // Byte 76: fcs_check_byte (bit 0 = is_fcs_checked, bit 1 = is_fcs_ok)
+            result.fcs_check_byte = WifiFcsInfo {
+                is_fcs_checked: (buffer[offset + 76] & 0x01) != 0,
+                is_fcs_ok: (buffer[offset + 76] & 0x02) != 0,
+            };
+
+            // Bytes 77-78: phi_offset (i16, big-endian)
+            result.phi_offset = ((buffer[offset + 77] as i16) << 8) | (buffer[offset + 78] as i16);
         }
 
         Ok(count)
