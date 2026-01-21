@@ -19,7 +19,7 @@ This crate extends the basic radio functionality provided by [`lora-phy`](https:
 ```toml
 [dependencies]
 lr1110-rs = { version = "0.1", features = ["system", "gnss", "wifi"] }
-lora-phy = { git = "https://github.com/leftger/lora-rs", branch = "feat/lr1110-lora-only" }
+lora-phy = { git = "https://github.com/lora-rs/lora-rs" }
 ```
 
 ## Usage

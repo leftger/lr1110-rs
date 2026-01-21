@@ -828,13 +828,19 @@ where
             result.frame_control = ((buffer[offset + 8] as u16) << 8) | (buffer[offset + 9] as u16);
 
             // Bytes 10-15: mac_address_1 (6 bytes)
-            result.mac_address_1.copy_from_slice(&buffer[offset + 10..offset + 16]);
+            result
+                .mac_address_1
+                .copy_from_slice(&buffer[offset + 10..offset + 16]);
 
             // Bytes 16-21: mac_address_2 (6 bytes)
-            result.mac_address_2.copy_from_slice(&buffer[offset + 16..offset + 22]);
+            result
+                .mac_address_2
+                .copy_from_slice(&buffer[offset + 16..offset + 22]);
 
             // Bytes 22-27: mac_address_3 (6 bytes)
-            result.mac_address_3.copy_from_slice(&buffer[offset + 22..offset + 28]);
+            result
+                .mac_address_3
+                .copy_from_slice(&buffer[offset + 22..offset + 28]);
 
             // Bytes 28-35: timestamp_us (u64, big-endian)
             result.timestamp_us = ((buffer[offset + 28] as u64) << 56)
@@ -847,19 +853,24 @@ where
                 | (buffer[offset + 35] as u64);
 
             // Bytes 36-37: beacon_period_tu (u16, big-endian)
-            result.beacon_period_tu = ((buffer[offset + 36] as u16) << 8) | (buffer[offset + 37] as u16);
+            result.beacon_period_tu =
+                ((buffer[offset + 36] as u16) << 8) | (buffer[offset + 37] as u16);
 
             // Bytes 38-39: seq_control (u16, big-endian)
             result.seq_control = ((buffer[offset + 38] as u16) << 8) | (buffer[offset + 39] as u16);
 
             // Bytes 40-71: ssid_bytes (32 bytes)
-            result.ssid_bytes.copy_from_slice(&buffer[offset + 40..offset + 72]);
+            result
+                .ssid_bytes
+                .copy_from_slice(&buffer[offset + 40..offset + 72]);
 
             // Byte 72: current_channel
             result.current_channel = WifiChannel::from(buffer[offset + 72]);
 
             // Bytes 73-74: country_code (2 bytes)
-            result.country_code.copy_from_slice(&buffer[offset + 73..offset + 75]);
+            result
+                .country_code
+                .copy_from_slice(&buffer[offset + 73..offset + 75]);
 
             // Byte 75: io_regulation
             result.io_regulation = buffer[offset + 75];

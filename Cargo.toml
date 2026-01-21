@@ -15,9 +15,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 # Core dependency on lora-phy for base LR1110 support
-lora-phy = { git = "https://github.com/leftger/lora-rs", branch = "feat/lr1110-lora-only" }
-# For release (once PR is merged):
-# lora-phy = { git = "https://github.com/lora-rs/lora-rs" }
+lora-phy = { git = "https://github.com/lora-rs/lora-rs" }
 
 # Embedded HAL traits
 embedded-hal = { version = "1" }

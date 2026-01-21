@@ -28,7 +28,7 @@ embassy-sync = { version = "0.7.2", features = ["defmt"] }
 embassy-futures = { version = "0.1.2" }
 
 # LR1110 support from lora-phy
-lora-phy = { git = "https://github.com/leftger/lora-rs", branch = "feat/lr1110-lora-only", features = ["defmt-03"] }
+lora-phy = { git = "https://github.com/lora-rs/lora-rs", features = ["defmt-03"] }
 
 # LR1110 extended features
 lr1110-rs = { path = "../..", features = ["defmt-03", "system", "gnss", "wifi", "bootloader", "lr_fhss", "regmem", "ranging", "irq-manager"] }
