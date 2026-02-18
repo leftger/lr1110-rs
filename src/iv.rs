@@ -139,14 +139,19 @@ where
     }
 }
 
-/// InterfaceVariant for LR1110 using Flex pin for BUSY
+/// InterfaceVariant for LR1110 using a Flex (bidirectional) pin for BUSY.
 ///
-/// This variant is specifically for firmware updates where the BUSY pin needs
-/// to be manipulated (OUTPUT/INPUT) during bootloader entry. It uses polling
-/// instead of EXTI interrupts for BUSY pin monitoring.
+/// This variant enables hardware bootloader entry per SWTL001: before calling
+/// `new()`, the caller drives BUSY LOW as an output during NRESET to force the
+/// LR1110 into its ROM bootloader, then releases the pin back to input mode.
 ///
-/// Note: This is less efficient than the standard InterfaceVariant but necessary
-/// for bootloader entry per SWTL001 specification.
+/// BUSY waiting is implemented as a cooperative spin-poll using `embassy_time`
+/// so that other Embassy tasks remain runnable while waiting.
+///
+/// Usage:
+///   1. Drive BUSY low as output, pulse RESET, wait 500 ms, set BUSY to input.
+///   2. Pass the BUSY Flex (now in input mode) to `Lr1110InterfaceVariantFlex::new()`.
+///   3. All subsequent BUSY waits use cooperative spin-poll.
 pub struct Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
 where
     RESET: OutputPin,
@@ -172,7 +177,7 @@ where
     ///
     /// # Arguments
     /// * `reset` - GPIO output pin connected to LR1110 RESET
-    /// * `busy` - Flex GPIO pin connected to LR1110 BUSY (DIO0) - active high when processing
+    /// * `busy` - Flex GPIO pin connected to LR1110 BUSY (DIO0) - active high when busy
     /// * `dio1` - GPIO input pin connected to LR1110 DIO1 (IRQ)
     /// * `rf_switch_rx` - Optional GPIO output for RX antenna switch
     /// * `rf_switch_tx` - Optional GPIO output for TX antenna switch
@@ -202,30 +207,22 @@ where
     CTRL: OutputPin,
 {
     async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError> {
-        // LR1110 reset sequence:
-        // 1. Set RESET low for at least 50us
-        // 2. Wait for BUSY to go low (chip ready)
-        // 3. Set RESET high
-        // 4. Wait for BUSY to go low again (chip ready after reset)
         delay.delay_ms(1).await;
         self.reset.set_low().map_err(|_| Reset)?;
         delay.delay_ms(10).await;
         self.reset.set_high().map_err(|_| Reset)?;
-        // Wait for chip to be ready after reset (poll since Flex doesn't support Wait)
+        // Cooperative spin-poll: yield every 10 µs while BUSY is high
         while self.busy.is_high().map_err(|_| Busy)? {
-            delay.delay_us(100).await;
+            embassy_time::Timer::after_micros(10).await;
         }
         Ok(())
     }
 
     async fn wait_on_busy(&mut self) -> Result<(), RadioError> {
-        // LR1110 BUSY pin (DIO0) is high when processing a command
-        // Wait for it to go low before sending next command
-        // Poll since Flex doesn't support Wait trait
+        // Cooperative spin-poll: yield every 10 µs while BUSY is high.
+        // LR1110 BUSY typically goes low within microseconds after a command.
         while self.busy.is_high().map_err(|_| Busy)? {
-            // Small delay to avoid busy-looping
-            // In a real async executor, this yields to other tasks
-            core::future::ready(()).await;
+            embassy_time::Timer::after_micros(10).await;
         }
         Ok(())
     }
