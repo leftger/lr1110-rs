@@ -139,23 +139,22 @@ where
     }
 }
 
-/// InterfaceVariant for LR1110 using a Flex (bidirectional) pin for BUSY.
+/// InterfaceVariant for LR1110 using a pin that supports both input/output and async waiting for BUSY.
 ///
 /// This variant enables hardware bootloader entry per SWTL001: before calling
 /// `new()`, the caller drives BUSY LOW as an output during NRESET to force the
-/// LR1110 into its ROM bootloader, then releases the pin back to input mode.
-///
-/// BUSY waiting is implemented as a cooperative spin-poll using `embassy_time`
-/// so that other Embassy tasks remain runnable while waiting.
+/// LR1110 into its ROM bootloader, then converts the pin to an interrupt-driven
+/// input (e.g. via `ExtiInput::from_flex()`) and passes it here.
 ///
 /// Usage:
-///   1. Drive BUSY low as output, pulse RESET, wait 500 ms, set BUSY to input.
-///   2. Pass the BUSY Flex (now in input mode) to `Lr1110InterfaceVariantFlex::new()`.
-///   3. All subsequent BUSY waits use cooperative spin-poll.
+///   1. Create a `Flex` pin for BUSY, drive it as output LOW, pulse RESET.
+///   2. Wait 500 ms, set Flex back to input mode.
+///   3. Convert to `ExtiInput` via `ExtiInput::from_flex()`.
+///   4. Pass the `ExtiInput` to `Lr1110InterfaceVariantFlex::new()`.
 pub struct Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
 where
     RESET: OutputPin,
-    BUSY: InputPin,
+    BUSY: InputPin + Wait,
     DIO1: Wait,
     CTRL: OutputPin,
 {
@@ -169,15 +168,15 @@ where
 impl<RESET, BUSY, DIO1, CTRL> Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
 where
     RESET: OutputPin,
-    BUSY: InputPin,
+    BUSY: InputPin + Wait,
     DIO1: Wait,
     CTRL: OutputPin,
 {
-    /// Create a new InterfaceVariant for LR1110 with Flex BUSY pin
+    /// Create a new InterfaceVariant for LR1110
     ///
     /// # Arguments
     /// * `reset` - GPIO output pin connected to LR1110 RESET
-    /// * `busy` - Flex GPIO pin connected to LR1110 BUSY (DIO0) - active high when busy
+    /// * `busy` - Interrupt-driven input connected to LR1110 BUSY (e.g. `ExtiInput`)
     /// * `dio1` - GPIO input pin connected to LR1110 DIO1 (IRQ)
     /// * `rf_switch_rx` - Optional GPIO output for RX antenna switch
     /// * `rf_switch_tx` - Optional GPIO output for TX antenna switch
@@ -202,7 +201,7 @@ impl<RESET, BUSY, DIO1, CTRL> InterfaceVariant
     for Lr1110InterfaceVariantFlex<RESET, BUSY, DIO1, CTRL>
 where
     RESET: OutputPin,
-    BUSY: InputPin,
+    BUSY: InputPin + Wait,
     DIO1: Wait,
     CTRL: OutputPin,
 {
@@ -211,19 +210,12 @@ where
         self.reset.set_low().map_err(|_| Reset)?;
         delay.delay_ms(10).await;
         self.reset.set_high().map_err(|_| Reset)?;
-        // Cooperative spin-poll: yield every 10 µs while BUSY is high
-        while self.busy.is_high().map_err(|_| Busy)? {
-            embassy_time::Timer::after_micros(10).await;
-        }
+        self.busy.wait_for_low().await.map_err(|_| Busy)?;
         Ok(())
     }
 
     async fn wait_on_busy(&mut self) -> Result<(), RadioError> {
-        // Cooperative spin-poll: yield every 10 µs while BUSY is high.
-        // LR1110 BUSY typically goes low within microseconds after a command.
-        while self.busy.is_high().map_err(|_| Busy)? {
-            embassy_time::Timer::after_micros(10).await;
-        }
+        self.busy.wait_for_low().await.map_err(|_| Busy)?;
         Ok(())
     }
 

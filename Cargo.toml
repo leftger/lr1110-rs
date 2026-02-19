@@ -24,8 +24,9 @@ embedded-hal-async = { version = "1" }
 # For no_std collections
 heapless = { version = "0.8", default-features = false }
 
-# embassy-time for async spin-poll in wait_on_busy (same git source as embassy-stm32)
-embassy-time = { git = "https://github.com/embassy-rs/embassy" }
+
+# Optional embassy-time for IRQ management features
+embassy-time = { git = "https://github.com/embassy-rs/embassy", optional = true }
 
 # Optional defmt support
 defmt = { version = "0.3", optional = true }
@@ -36,8 +37,8 @@ default = ["gnss", "wifi", "crypto", "ranging", "gfsk", "lr_fhss", "system", "bo
 ## Enable GNSS (GPS/BeiDou) scanning functionality
 gnss = []
 
-## Enable advanced IRQ management for GNSS/WiFi
-irq-manager = []
+## Enable advanced IRQ management for GNSS/WiFi (requires embassy-time)
+irq-manager = ["dep:embassy-time"]
 
 ## Enable WiFi passive scanning functionality
 wifi = []
