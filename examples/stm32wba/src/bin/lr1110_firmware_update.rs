@@ -248,6 +248,9 @@ async fn main(_spawner: Spawner) {
     // Note: We keep BUSY as Flex since it was used for bootloader entry
     let dio1 = ExtiInput::new(p.PB14, p.EXTI14, Pull::Down, Irqs);
 
+    // Configure LED on PD8 for visual feedback during firmware update
+    let mut led = Output::new(p.PD8, Level::Low, Speed::Low);
+
     // Optional RF switch control pins
     let rf_switch_rx: Option<Output<'_>> = None;
     let rf_switch_tx: Option<Output<'_>> = None;
@@ -284,6 +287,7 @@ async fn main(_spawner: Spawner) {
         FIRMWARE_TYPE,
         EXPECTED_FIRMWARE_VERSION,
         FIRMWARE_IMAGE,
+        &mut led,
     )
     .await;
 
@@ -332,6 +336,7 @@ async fn perform_firmware_update<SPI, IV, C>(
     firmware_type: FirmwareType,
     expected_version: u16,
     firmware_image: &[u32],
+    led: &mut Output<'_>,
 ) -> Result<FirmwareUpdateStatus, &'static str>
 where
     SPI: embedded_hal_async::spi::SpiDevice<u8>,
@@ -470,6 +475,9 @@ where
         words_written += chunk_size;
         offset += (chunk_size * 4) as u32;
 
+        // Toggle LED to indicate progress
+        led.toggle();
+
         // Log progress when crossing 10% boundaries
         let progress = (words_written * 100) / total_words;
         let progress_decade = progress / 10;
@@ -522,6 +530,9 @@ where
     }
 
     info!("  Firmware version verified OK");
+
+    // Turn off LED after successful update
+    led.set_low();
 
     Ok(FirmwareUpdateStatus::Ok)
 }
