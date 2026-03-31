@@ -73,6 +73,8 @@ use {defmt_rtt as _, panic_probe as _};
 bind_interrupts!(struct Irqs {
     EXTI13 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI13>;
     EXTI14 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI14>;
+    GPDMA1_CHANNEL0 => embassy_stm32::dma::InterruptHandler<embassy_stm32::peripherals::GPDMA1_CH0>;
+    GPDMA1_CHANNEL1 => embassy_stm32::dma::InterruptHandler<embassy_stm32::peripherals::GPDMA1_CH1>;
 });
 
 // ============================================================================
@@ -200,6 +202,7 @@ async fn main(_spawner: Spawner) {
         p.PA9,  // MISO
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
+        Irqs,
         spi_config,
     );
 
@@ -244,8 +247,10 @@ async fn main(_spawner: Spawner) {
 
     info!("Bootloader entry sequence complete");
 
-    // Now configure other pins for radio operation
-    // Note: We keep BUSY as Flex since it was used for bootloader entry
+    // Convert BUSY Flex to interrupt-driven ExtiInput now that bootloader entry is done
+    let busy = ExtiInput::from_flex(busy, p.EXTI13, Irqs);
+
+    // Configure remaining pins for radio operation
     let dio1 = ExtiInput::new(p.PB14, p.EXTI14, Pull::Down, Irqs);
 
     // Configure LED on PD8 for visual feedback during firmware update
@@ -255,8 +260,6 @@ async fn main(_spawner: Spawner) {
     let rf_switch_rx: Option<Output<'_>> = None;
     let rf_switch_tx: Option<Output<'_>> = None;
 
-    // Create a custom InterfaceVariant using Flex for BUSY
-    // We use a type alias to match the expected types
     use lr1110_rs::iv::Lr1110InterfaceVariantFlex;
     let iv =
         Lr1110InterfaceVariantFlex::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();

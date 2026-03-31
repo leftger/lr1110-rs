@@ -96,6 +96,8 @@ const CHECK_INTERVAL_NEEDS_UPDATE_S: u64 = 30; // 30 seconds
 bind_interrupts!(struct Irqs {
     EXTI13 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI13>;
     EXTI14 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI14>;
+    GPDMA1_CHANNEL0 => embassy_stm32::dma::InterruptHandler<embassy_stm32::peripherals::GPDMA1_CH0>;
+    GPDMA1_CHANNEL1 => embassy_stm32::dma::InterruptHandler<embassy_stm32::peripherals::GPDMA1_CH1>;
 });
 
 #[embassy_executor::main]
@@ -138,6 +140,7 @@ async fn main(_spawner: Spawner) {
         p.PA9,
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
+        Irqs,
         spi_config,
     );
 
