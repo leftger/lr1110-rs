@@ -144,6 +144,32 @@ pub fn rttof_rssi_raw_to_dbm(raw_result: &RttofRawResult) -> i8 {
 }
 
 // =============================================================================
+// Role and Status Types
+// =============================================================================
+
+/// Ranging device role
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum RangingRole {
+    /// Initiates requests and collects results
+    Manager,
+    /// Listens and responds; hardware handles the RTToF reply automatically
+    Subordinate,
+}
+
+/// Outcome of a completed ranging session
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum RangingStatus {
+    /// ≥10 channels succeeded; median distance is valid
+    Valid,
+    /// <10 channels succeeded; result is unreliable
+    PerError,
+    /// Global session timeout before all channels completed
+    Timeout,
+}
+
+// =============================================================================
 // RTToF Ranging Constants for Demo Application
 // =============================================================================
 

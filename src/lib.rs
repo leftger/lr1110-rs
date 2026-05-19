@@ -180,6 +180,12 @@ pub mod crypto;
 #[cfg(feature = "ranging")]
 pub mod ranging;
 
+#[cfg(all(feature = "ranging", feature = "irq-manager"))]
+pub mod ranging_manager;
+
+#[cfg(feature = "ranging")]
+pub mod ranging_protocol;
+
 #[cfg(feature = "gfsk")]
 pub mod gfsk;
 
@@ -221,6 +227,12 @@ pub use crypto::CryptoExt;
 
 #[cfg(feature = "ranging")]
 pub use ranging::RangingExt;
+
+#[cfg(all(feature = "ranging", feature = "irq-manager"))]
+pub use ranging_manager::RangingManager;
+
+#[cfg(feature = "ranging")]
+pub use ranging_protocol::{HoppingSession, RangingProtocol};
 
 #[cfg(feature = "gfsk")]
 pub use gfsk::GfskExt;
