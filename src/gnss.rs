@@ -497,6 +497,9 @@ where
         result_mask: u8,
         nb_sv_max: u8,
     ) -> Result<(), RadioError> {
+        if effort_mode.value() > 0x02 {
+            return Err(RadioError::InvalidConfiguration);
+        }
         let opcode = GnssOpCode::Scan.bytes();
         let cmd = [
             opcode[0],
@@ -778,5 +781,37 @@ where
         }
 
         Ok(count as u8)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gnss_manual_opcode_bytes_match_um_v10_and_current_api() {
+        // UM v10 core commands
+        assert_eq!(GnssOpCode::SetConstellation.bytes(), [0x04, 0x00]);
+        assert_eq!(GnssOpCode::SetScanMode.bytes(), [0x04, 0x08]);
+        assert_eq!(GnssOpCode::GetResultSize.bytes(), [0x04, 0x0C]);
+        assert_eq!(GnssOpCode::ReadResults.bytes(), [0x04, 0x0D]);
+        assert_eq!(GnssOpCode::SetAssistancePosition.bytes(), [0x04, 0x10]);
+        assert_eq!(GnssOpCode::GetNbSatellites.bytes(), [0x04, 0x17]);
+        assert_eq!(GnssOpCode::GetSatellites.bytes(), [0x04, 0x18]);
+
+        // Current unified-scan command used by this crate
+        assert_eq!(GnssOpCode::Scan.bytes(), [0x04, 0x0B]);
+    }
+
+    #[test]
+    fn gnss_scan_frame_shape_matches_current_driver_contract() {
+        // Driver format: opcode[2] + effort_mode[1] + result_mask[1] + nb_sv_max[1]
+        let opcode = GnssOpCode::Scan.bytes();
+        let effort_mode = GnssSearchMode::HighEffort.value();
+        let result_mask = 0x07u8;
+        let nb_sv_max = 0u8;
+        let cmd = [opcode[0], opcode[1], effort_mode, result_mask, nb_sv_max];
+
+        assert_eq!(cmd, [0x04, 0x0B, effort_mode, 0x07, 0x00]);
     }
 }

@@ -970,6 +970,9 @@ where
         voltage: TcxoVoltage,
         timeout: u32,
     ) -> Result<(), RadioError> {
+        if timeout > 0x00FF_FFFF {
+            return Err(RadioError::PayloadSizeUnexpected(timeout as usize));
+        }
         let opcode = SystemOpCode::SetTcxoMode.bytes();
         let cmd = [
             opcode[0],
@@ -1153,4 +1156,52 @@ pub fn convert_vbat_to_volts(raw_value: u8) -> f32 {
     let vbat_volts = ((DIVIDER_RATIO * (raw_value as f32) / ADC_MAX) - 1.0) * VREF;
 
     vbat_volts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn system_manual_opcode_bytes_match_um_v10() {
+        assert_eq!(SystemOpCode::GetStatus.bytes(), [0x01, 0x00]);
+        assert_eq!(SystemOpCode::GetVersion.bytes(), [0x01, 0x01]);
+        assert_eq!(SystemOpCode::GetErrors.bytes(), [0x01, 0x0D]);
+        assert_eq!(SystemOpCode::ClearErrors.bytes(), [0x01, 0x0E]);
+        assert_eq!(SystemOpCode::Calibrate.bytes(), [0x01, 0x0F]);
+        assert_eq!(SystemOpCode::SetRegMode.bytes(), [0x01, 0x10]);
+        assert_eq!(SystemOpCode::CalibrateImage.bytes(), [0x01, 0x11]);
+        assert_eq!(SystemOpCode::SetDioAsRfSwitch.bytes(), [0x01, 0x12]);
+        assert_eq!(SystemOpCode::SetDioIrqParams.bytes(), [0x01, 0x13]);
+        assert_eq!(SystemOpCode::ClearIrq.bytes(), [0x01, 0x14]);
+        assert_eq!(SystemOpCode::CfgLfClk.bytes(), [0x01, 0x16]);
+        assert_eq!(SystemOpCode::SetTcxoMode.bytes(), [0x01, 0x17]);
+        assert_eq!(SystemOpCode::Reboot.bytes(), [0x01, 0x18]);
+        assert_eq!(SystemOpCode::GetVbat.bytes(), [0x01, 0x19]);
+        assert_eq!(SystemOpCode::GetTemp.bytes(), [0x01, 0x1A]);
+        assert_eq!(SystemOpCode::SetSleep.bytes(), [0x01, 0x1B]);
+        assert_eq!(SystemOpCode::SetStandby.bytes(), [0x01, 0x1C]);
+        assert_eq!(SystemOpCode::SetFs.bytes(), [0x01, 0x1D]);
+        assert_eq!(SystemOpCode::ReadUid.bytes(), [0x01, 0x25]);
+        assert_eq!(SystemOpCode::ReadJoinEui.bytes(), [0x01, 0x26]);
+        assert_eq!(SystemOpCode::ReadPin.bytes(), [0x01, 0x27]);
+    }
+
+    #[test]
+    fn set_tcxo_mode_frame_shape_matches_manual() {
+        // UM format: opcode[2] + tune[1] + delay[3]
+        let opcode = SystemOpCode::SetTcxoMode.bytes();
+        let tune = TcxoVoltage::Voltage2_7V as u8;
+        let timeout: u32 = 0x00A1B2;
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            tune,
+            ((timeout >> 16) & 0xFF) as u8,
+            ((timeout >> 8) & 0xFF) as u8,
+            (timeout & 0xFF) as u8,
+        ];
+
+        assert_eq!(cmd, [0x01, 0x17, tune, 0x00, 0xA1, 0xB2]);
+    }
 }

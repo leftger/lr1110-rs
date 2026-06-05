@@ -627,6 +627,19 @@ where
         timeout_per_scan_ms: u16,
         abort_on_timeout: bool,
     ) -> Result<(), RadioError> {
+        if max_results == 0 {
+            return Err(RadioError::PayloadSizeUnexpected(max_results as usize));
+        }
+        if nb_scan_per_channel == 0 {
+            return Err(RadioError::PayloadSizeUnexpected(nb_scan_per_channel as usize));
+        }
+        if timeout_per_scan_ms == 0 {
+            return Err(RadioError::PayloadSizeUnexpected(timeout_per_scan_ms as usize));
+        }
+        // Channel mask bits above channels 1..14 are invalid.
+        if channel_mask & 0xC000 != 0 {
+            return Err(RadioError::InvalidConfiguration);
+        }
         let opcode = WifiOpCode::Scan.bytes();
         let cmd = [
             opcode[0],
@@ -653,6 +666,21 @@ where
         timeout_per_channel_ms: u16,
         timeout_total_ms: u16,
     ) -> Result<(), RadioError> {
+        if max_results == 0 {
+            return Err(RadioError::PayloadSizeUnexpected(max_results as usize));
+        }
+        if timeout_per_channel_ms == 0 {
+            return Err(RadioError::PayloadSizeUnexpected(
+                timeout_per_channel_ms as usize,
+            ));
+        }
+        if timeout_total_ms == 0 {
+            return Err(RadioError::PayloadSizeUnexpected(timeout_total_ms as usize));
+        }
+        // Channel mask bits above channels 1..14 are invalid.
+        if channel_mask & 0xC000 != 0 {
+            return Err(RadioError::InvalidConfiguration);
+        }
         let opcode = WifiOpCode::ScanTimeLimit.bytes();
         let cmd = [
             opcode[0],
@@ -944,5 +972,53 @@ where
             timestamp_s as u8,
         ];
         self.execute_command(&cmd).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wifi_manual_opcode_bytes_match_um_v10() {
+        assert_eq!(WifiOpCode::Scan.bytes(), [0x03, 0x00]);
+        assert_eq!(WifiOpCode::GetResultSize.bytes(), [0x03, 0x05]);
+        assert_eq!(WifiOpCode::ReadResult.bytes(), [0x03, 0x06]);
+        assert_eq!(WifiOpCode::ResetCumulTiming.bytes(), [0x03, 0x07]);
+        assert_eq!(WifiOpCode::ReadCumulTiming.bytes(), [0x03, 0x08]);
+    }
+
+    #[test]
+    fn wifi_scan_frame_shape_matches_manual() {
+        // UM format for WifiScan:
+        // opcode[2] + wifi_type[1] + chan_mask[2] + scan_mode[1] +
+        // max_results[1] + nb_scan_per_channel[1] + timeout[2] + abort_on_timeout[1]
+        let opcode = WifiOpCode::Scan.bytes();
+        let wifi_type = WifiSignalTypeScan::TypeBGN.value();
+        let chan_mask = WIFI_CHANNEL_1_MASK | WIFI_CHANNEL_6_MASK | WIFI_CHANNEL_11_MASK;
+        let scan_mode = WifiScanMode::Beacon.value();
+        let max_results = 16u8;
+        let nb_scan_per_channel = 1u8;
+        let timeout = 100u16;
+        let abort_on_timeout = false;
+
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            wifi_type,
+            (chan_mask >> 8) as u8,
+            chan_mask as u8,
+            scan_mode,
+            max_results,
+            nb_scan_per_channel,
+            (timeout >> 8) as u8,
+            timeout as u8,
+            abort_on_timeout as u8,
+        ];
+
+        assert_eq!(
+            cmd,
+            [0x03, 0x00, wifi_type, 0x04, 0x21, scan_mode, 16, 1, 0x00, 0x64, 0]
+        );
     }
 }

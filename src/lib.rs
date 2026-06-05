@@ -142,6 +142,7 @@ pub use lora_phy::mod_traits::InterfaceVariant;
 /// Use this on any platform (STM32, NRF52, RP2040, etc.) where you have the
 /// LR1110 BUSY pin wired to a GPIO.
 pub mod iv;
+pub mod command_io;
 
 // =============================================================================
 // Feature-gated modules
