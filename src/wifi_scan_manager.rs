@@ -80,9 +80,10 @@
 //! See `examples/stm32wba/src/bin/lr1110_wifi_scan_with_irq.rs` for complete example.
 
 use crate::radio_planner::{PlannerError, RadioPlanner, RadioTask, TaskPriority, TaskType};
+use crate::time::{delay_ms, Instant};
 use crate::wifi::{WifiChannelMask, WifiScanMode, WifiSignalTypeScan, WIFI_ALL_CHANNELS_MASK};
 use crate::wifi_irq::{WifiIrqManager, WifiPostScanCallback, WifiPreScanCallback, WifiScanStatus};
-use embassy_time::Instant;
+use embedded_hal_async::delay::Delay;
 
 /// WiFi scan configuration
 #[derive(Clone, Copy, Debug)]
@@ -224,13 +225,15 @@ impl WifiScanManager {
     /// # Returns
     ///
     /// `WifiScanResult` with scan status and metadata
-    pub async fn scan<Radio>(
+    pub async fn scan<Radio, D>(
         &mut self,
         radio: &mut Radio,
+        delay: &mut D,
         config: &WifiScanConfig,
     ) -> Result<WifiScanResult, PlannerError>
     where
         Radio: crate::wifi::WifiExt,
+        D: Delay,
     {
         // Execute pre-scan actions BEFORE any radio access
         self.irq_manager.execute_prescan_actions();
@@ -271,7 +274,7 @@ impl WifiScanManager {
 
         // Wait for scan completion
         // In production, this would be handled by IRQ_WIFI_SCAN_DONE
-        embassy_time::Timer::after_millis(config.scan_timeout_ms as u64).await;
+        delay_ms(delay, config.scan_timeout_ms).await;
 
         // Record end time
         self.scan_end_time = Some(Instant::now());

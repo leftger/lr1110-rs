@@ -31,7 +31,7 @@
 //! planner.enqueue_task(task)?;
 //! ```
 
-use embassy_time::Instant;
+use crate::time::Instant;
 
 /// Radio task types
 #[derive(Clone, Copy, PartialEq, Debug)]

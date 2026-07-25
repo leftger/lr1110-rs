@@ -631,10 +631,14 @@ where
             return Err(RadioError::PayloadSizeUnexpected(max_results as usize));
         }
         if nb_scan_per_channel == 0 {
-            return Err(RadioError::PayloadSizeUnexpected(nb_scan_per_channel as usize));
+            return Err(RadioError::PayloadSizeUnexpected(
+                nb_scan_per_channel as usize,
+            ));
         }
         if timeout_per_scan_ms == 0 {
-            return Err(RadioError::PayloadSizeUnexpected(timeout_per_scan_ms as usize));
+            return Err(RadioError::PayloadSizeUnexpected(
+                timeout_per_scan_ms as usize,
+            ));
         }
         // Channel mask bits above channels 1..14 are invalid.
         if channel_mask & 0xC000 != 0 {

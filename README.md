@@ -60,4 +60,8 @@ Tested on STM32WBA65RI with LR1110. Compatible with LR1110, LR1120, and LR1121 v
 
 ## License
 
-Licensed under either of Apache License 2.0 or MIT license at your option.
+The contents of this repository are dual-licensed under the _MIT OR Apache 2.0_
+License. That means you can choose either the MIT license or the Apache 2.0
+license when you re-use this code. See [`LICENSE-MIT`](./LICENSE-MIT) or
+[`LICENSE-APACHE`](./LICENSE-APACHE) for more information on each specific
+license.

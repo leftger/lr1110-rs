@@ -80,7 +80,11 @@ where
     ///
     /// `voltage` is the raw tune value from the user manual (0x00..0x07).
     /// `timeout` is encoded on 24 bits in RTC steps.
-    pub async fn system_set_tcxo_mode(&mut self, voltage: u8, timeout: u32) -> Result<(), RadioError> {
+    pub async fn system_set_tcxo_mode(
+        &mut self,
+        voltage: u8,
+        timeout: u32,
+    ) -> Result<(), RadioError> {
         if voltage > 0x07 {
             return Err(RadioError::InvalidConfiguration);
         }
@@ -113,7 +117,9 @@ where
             return Err(RadioError::PayloadSizeUnexpected(max_results as usize));
         }
         if nb_scan_per_channel == 0 {
-            return Err(RadioError::PayloadSizeUnexpected(nb_scan_per_channel as usize));
+            return Err(RadioError::PayloadSizeUnexpected(
+                nb_scan_per_channel as usize,
+            ));
         }
         if timeout == 0 {
             return Err(RadioError::PayloadSizeUnexpected(timeout as usize));

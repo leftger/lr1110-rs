@@ -50,7 +50,7 @@
 //!     ..Default::default()
 //! };
 //!
-//! let result = manager.scan(&mut radio, &config).await?;
+//! let result = manager.scan(&mut radio, &mut delay, &config).await?;
 //! ```
 //!
 //! ## Almanac Management
@@ -94,7 +94,7 @@
 //!         "gnss",        # GNSS scanning
 //!         "wifi",        # WiFi scanning
 //!         "system",      # System functions
-//!         "irq-manager", # Advanced IRQ management (requires embassy-time)
+//!         "irq-manager", # Advanced IRQ management (requires [`time::set_clock`])
 //!         "defmt-03"     # Logging
 //!     ]
 //! }
@@ -133,6 +133,7 @@ pub use lora_phy::mod_traits::InterfaceVariant;
 // Interface Variant for boards with BUSY pin connected
 // =============================================================================
 
+pub mod command_io;
 /// InterfaceVariant implementation for LR1110 with BUSY pin support.
 ///
 /// This module provides a generic InterfaceVariant that properly waits for the
@@ -142,7 +143,6 @@ pub use lora_phy::mod_traits::InterfaceVariant;
 /// Use this on any platform (STM32, NRF52, RP2040, etc.) where you have the
 /// LR1110 BUSY pin wired to a GPIO.
 pub mod iv;
-pub mod command_io;
 
 // =============================================================================
 // Feature-gated modules
@@ -165,6 +165,9 @@ pub mod almanac;
 
 #[cfg(feature = "irq-manager")]
 pub mod radio_planner;
+
+#[cfg(feature = "irq-manager")]
+pub mod time;
 
 #[cfg(feature = "wifi")]
 pub mod wifi;
@@ -231,6 +234,9 @@ pub use ranging::RangingExt;
 
 #[cfg(all(feature = "ranging", feature = "irq-manager"))]
 pub use ranging_manager::RangingManager;
+
+#[cfg(feature = "irq-manager")]
+pub use time::{set_clock, DurationMs, Instant};
 
 #[cfg(feature = "ranging")]
 pub use ranging_protocol::{HoppingSession, RangingProtocol};

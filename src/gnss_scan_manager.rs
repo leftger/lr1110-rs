@@ -83,7 +83,8 @@
 use crate::gnss::{GnssConstellationMask, GnssSearchMode};
 use crate::gnss_irq::{GnssIrqManager, GnssScanStatus, PostScanCallback, PreScanCallback};
 use crate::radio_planner::{PlannerError, RadioPlanner, RadioTask, TaskPriority, TaskType};
-use embassy_time::Instant;
+use crate::time::{delay_ms, Instant};
+use embedded_hal_async::delay::Delay;
 
 /// GNSS scan mode configuration
 #[derive(Clone, Copy, Debug)]
@@ -257,13 +258,15 @@ impl GnssScanManager {
     /// # Returns
     ///
     /// `ScanResult` with scan status and metadata
-    pub async fn scan<Radio>(
+    pub async fn scan<Radio, D>(
         &mut self,
         radio: &mut Radio,
+        delay: &mut D,
         config: &ScanConfig,
     ) -> Result<ScanResult, PlannerError>
     where
         Radio: crate::gnss::GnssExt,
+        D: Delay,
     {
         // Determine scan group parameters
         let (scan_group_size, scan_group_delay_s) = match config.mode {
@@ -320,7 +323,7 @@ impl GnssScanManager {
 
         // Wait for scan completion (in real application, this would be via IRQ)
         // For now, use a timeout-based approach
-        embassy_time::Timer::after_millis(config.scan_timeout_ms as u64).await;
+        delay_ms(delay, config.scan_timeout_ms).await;
 
         let duration_ms = start_time.elapsed().as_millis() as u32;
 

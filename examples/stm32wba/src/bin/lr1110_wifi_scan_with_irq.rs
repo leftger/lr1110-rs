@@ -221,6 +221,7 @@ async fn main(_spawner: Spawner) {
     info!("Initializing WiFi Scan Manager");
 
     let mut scan_manager = WifiScanManager::new();
+    lr1110_rs::set_clock(|| embassy_time::Instant::now().as_millis());
 
     // Register pre/post-scan callbacks
     scan_manager.set_prescan_callback(wifi_prescan_callback);
@@ -267,7 +268,8 @@ async fn main(_spawner: Spawner) {
         info!("WiFi Scan #{}", scan_count);
 
         // Perform WiFi scan using the scan manager
-        match scan_manager.scan(&mut radio, &scan_config).await {
+        let mut scan_delay = Delay;
+        match scan_manager.scan(&mut radio, &mut scan_delay, &scan_config).await {
             Ok(result) => {
                 info!("Scan Status: {:?}", result.status);
                 info!("  Duration: {}ms", result.duration_ms);

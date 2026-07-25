@@ -77,8 +77,7 @@
 //! ```
 
 use crate::ranging::{
-    calculate_ranging_request_delay_ms, calculate_symbol_time_ms,
-    lora_bw,
+    calculate_ranging_request_delay_ms, calculate_symbol_time_ms, lora_bw,
     ranging_config::{
         DONE_PROCESSING_TIME_MS, INIT_PAYLOAD_LENGTH, MAX_HOPPING_CHANNELS, MIN_HOPPING_CHANNELS,
         RESPONSE_SYMBOLS_COUNT,
@@ -131,7 +130,8 @@ impl ProtocolConfig {
         channel_table: &'static [u32],
         base_freq_hz: u32,
     ) -> Self {
-        let req_delay_ms = calculate_ranging_request_delay_ms(bw, sf, preamble_len, RESPONSE_SYMBOLS_COUNT);
+        let req_delay_ms =
+            calculate_ranging_request_delay_ms(bw, sf, preamble_len, RESPONSE_SYMBOLS_COUNT);
 
         let response_sym_time_ms =
             (calculate_symbol_time_ms(bw, sf) * RESPONSE_SYMBOLS_COUNT as f32) as u32;
@@ -152,7 +152,18 @@ impl ProtocolConfig {
             sf,
             bw,
             cr,
-            if (1u32 << sf as u32) >= 16 * match bw { lora_bw::BW_125 => 125u32, lora_bw::BW_250 => 250, _ => 500 } { 1 } else { 0 },
+            if (1u32 << sf as u32)
+                >= 16
+                    * match bw {
+                        lora_bw::BW_125 => 125u32,
+                        lora_bw::BW_250 => 250,
+                        _ => 500,
+                    }
+            {
+                1
+            } else {
+                0
+            },
         );
 
         Self {
@@ -221,7 +232,6 @@ pub enum ProtocolAction {
     None,
 
     // ── LoRa init phase ──────────────────────────────────────────────────────
-
     /// **[Manager]** Write `payload` to the TX buffer and issue `set_tx(0)`
     SendLoRaInit { payload: [u8; INIT_PAYLOAD_LENGTH] },
 
@@ -235,20 +245,21 @@ pub enum ProtocolAction {
     SendLoRaResponse { payload: [u8; INIT_PAYLOAD_LENGTH] },
 
     // ── RTToF hopping phase ───────────────────────────────────────────────────
-
     /// **[Manager]** `set_rf_frequency(freq_hz)` then `set_tx(0)`
     StartRangingTx { freq_hz: u32 },
 
     /// **[Subordinate]** `set_rf_frequency(freq_hz)` then `set_rx(0)`;
     /// also start a software timer for `sub_rx_timeout_ms`
-    StartRangingRx { freq_hz: u32, sub_rx_timeout_ms: u32 },
+    StartRangingRx {
+        freq_hz: u32,
+        sub_rx_timeout_ms: u32,
+    },
 
     /// **[Manager]** The RTToF result was already captured via `record_result()`;
     /// now start the inter-channel delay timer for `timer_ms` milliseconds
     ResultCaptured { timer_ms: u32 },
 
     // ── Timer management ─────────────────────────────────────────────────────
-
     /// Start the inter-channel delay timer for `ms` milliseconds
     StartChannelTimer { ms: u32 },
 
@@ -262,7 +273,6 @@ pub enum ProtocolAction {
     StandbyAndStartChannelTimer { ms: u32 },
 
     // ── Terminal ──────────────────────────────────────────────────────────────
-
     /// All channels complete — call `finalize()` to get results
     SessionComplete,
 
@@ -367,9 +377,7 @@ impl HoppingSession {
 
     /// Packet error rate: 100 − (valid / total) × 100
     pub fn per(&self) -> u8 {
-        100u8.saturating_sub(
-            ((self.valid_count as u32 * 100) / MAX_HOPPING_CHANNELS as u32) as u8,
-        )
+        100u8.saturating_sub(((self.valid_count as u32 * 100) / MAX_HOPPING_CHANNELS as u32) as u8)
     }
 
     /// Final `RangingStatus` based on valid count
@@ -492,7 +500,10 @@ impl RangingProtocol {
 
     /// Returns `true` once the session has reached a terminal state
     pub fn is_done(&self) -> bool {
-        matches!(self.state, ProtocolState::Done | ProtocolState::GlobalTimeout)
+        matches!(
+            self.state,
+            ProtocolState::Done | ProtocolState::GlobalTimeout
+        )
     }
 
     // ── Result extraction ─────────────────────────────────────────────────────
@@ -634,7 +645,9 @@ impl RangingProtocol {
                         // Switch to RTToF hopping phase
                         self.phase = Phase::RttofHopping;
                         self.state = ProtocolState::RangingStart;
-                        ProtocolAction::StartChannelTimer { ms: self.config.req_delay_ms }
+                        ProtocolAction::StartChannelTimer {
+                            ms: self.config.req_delay_ms,
+                        }
                     }
                     RangingRole::Subordinate => {
                         // Echo payload back with own RSSI in byte 5
@@ -679,10 +692,8 @@ impl RangingProtocol {
                 let timer_ms;
                 match self.role {
                     RangingRole::Manager => {
-                        self.hopping.record_and_advance(
-                            self.pending_distance_m,
-                            self.pending_rssi_dbm,
-                        );
+                        self.hopping
+                            .record_and_advance(self.pending_distance_m, self.pending_rssi_dbm);
                         timer_ms = DONE_PROCESSING_TIME_MS;
                     }
                     RangingRole::Subordinate => {
@@ -708,11 +719,9 @@ impl RangingProtocol {
                     RangingRole::Manager => {
                         ProtocolAction::StandbyAndStartChannelTimer { ms: backoff }
                     }
-                    RangingRole::Subordinate => {
-                        ProtocolAction::StandbyAndStartChannelTimer {
-                            ms: backoff.saturating_sub(1),
-                        }
-                    }
+                    RangingRole::Subordinate => ProtocolAction::StandbyAndStartChannelTimer {
+                        ms: backoff.saturating_sub(1),
+                    },
                 }
             }
 

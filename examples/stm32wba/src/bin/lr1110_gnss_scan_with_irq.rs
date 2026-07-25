@@ -296,6 +296,7 @@ async fn main(_spawner: Spawner) {
     info!("-------------------------------------------");
 
     let mut scan_manager = GnssScanManager::new();
+    lr1110_rs::set_clock(|| embassy_time::Instant::now().as_millis());
 
     // Register pre/post-scan callbacks for system coordination
     scan_manager.set_prescan_callback(gnss_prescan_actions);
@@ -384,7 +385,8 @@ async fn main(_spawner: Spawner) {
         // - Radio planner coordination
         // - Pre/post-scan callbacks
         // - Conditional post-scan execution
-        match scan_manager.scan(&mut radio, &scan_config).await {
+        let mut scan_delay = Delay;
+        match scan_manager.scan(&mut radio, &mut scan_delay, &scan_config).await {
             Ok(result) => {
                 info!("Scan Status: {:?}", result.status);
                 info!("  Duration: {}ms", result.duration_ms);

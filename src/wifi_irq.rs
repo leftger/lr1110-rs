@@ -59,7 +59,8 @@
 //! ```
 
 use core::sync::atomic::{AtomicBool, Ordering};
-use embassy_time::Instant;
+
+use crate::time::Instant;
 
 /// WiFi scan completion status
 #[derive(Clone, Copy, PartialEq, Debug)]

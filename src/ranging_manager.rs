@@ -63,16 +63,15 @@
 
 use crate::radio::RadioControlExt;
 use crate::ranging::{
-    calculate_ranging_request_delay_ms,
-    lora_bw, lora_sf,
-    packet_type,
+    calculate_ranging_request_delay_ms, lora_bw, lora_sf, packet_type,
     ranging_config::{
         DONE_PROCESSING_TIME_MS, INIT_PAYLOAD_LENGTH, MAX_HOPPING_CHANNELS, MIN_HOPPING_CHANNELS,
         RESPONSE_SYMBOLS_COUNT, RX_CONTINUOUS, SUBORDINATE_CHECK_LENGTH_BYTES,
     },
     RangingExt,
 };
-use embassy_time::{Duration, Instant, Timer};
+use crate::time::{delay_ms, Instant};
+use embedded_hal_async::delay::Delay;
 use lora_phy::mod_params::{Bandwidth, RadioError};
 
 pub use crate::ranging::{RangingRole, RangingStatus};
@@ -249,14 +248,16 @@ impl RangingManager {
     ///
     /// - `RangingError::Radio` on SPI/hardware failures
     /// - `RangingError::InitFailed` if no valid init response arrives within `init_timeout_ms`
-    pub async fn run<Radio>(
+    pub async fn run<Radio, D>(
         &mut self,
         radio: &mut Radio,
+        delay: &mut D,
         config: &RangingConfig,
         role: RangingRole,
     ) -> Result<RangingResult, RangingError>
     where
         Radio: RadioControlExt + RangingExt,
+        D: Delay,
     {
         debug_assert!(
             config.channel_table.len() == MAX_HOPPING_CHANNELS,
@@ -268,8 +269,8 @@ impl RangingManager {
         }
 
         let result = match role {
-            RangingRole::Manager => self.run_manager(radio, config).await,
-            RangingRole::Subordinate => self.run_subordinate(radio, config).await,
+            RangingRole::Manager => self.run_manager(radio, delay, config).await,
+            RangingRole::Subordinate => self.run_subordinate(radio, delay, config).await,
         };
 
         if let Some(cb) = self.postranging_cb {
@@ -283,13 +284,15 @@ impl RangingManager {
     // Manager
     // =========================================================================
 
-    async fn run_manager<Radio>(
+    async fn run_manager<Radio, D>(
         &mut self,
         radio: &mut Radio,
+        delay: &mut D,
         config: &RangingConfig,
     ) -> Result<RangingResult, RangingError>
     where
         Radio: RadioControlExt + RangingExt,
+        D: Delay,
     {
         let ldro = compute_ldro(config.bw, config.sf);
         let req_delay_ms = calculate_ranging_request_delay_ms(
@@ -314,13 +317,11 @@ impl RangingManager {
 
         radio.write_buffer(0, &payload).await?;
         radio.set_tx(0).await?;
-        Timer::after_millis(lora_toa_ms as u64 + 5).await; // wait for TX_DONE
+        delay_ms(delay, lora_toa_ms + 5).await; // wait for TX_DONE
 
         // Enter RX for subordinate response
-        radio
-            .set_rx_ms(lora_toa_ms + 50)
-            .await?;
-        Timer::after_millis(lora_toa_ms as u64 + 50).await; // wait for RX_DONE or timeout
+        radio.set_rx_ms(lora_toa_ms + 50).await?;
+        delay_ms(delay, lora_toa_ms + 50).await; // wait for RX_DONE or timeout
 
         let (pld_len, buf_ptr) = radio.get_rx_buffer_status().await?;
         if (pld_len as usize) < INIT_PAYLOAD_LENGTH {
@@ -349,13 +350,12 @@ impl RangingManager {
         self.setup_rttof_manager(radio, config, ldro).await?;
 
         // Global timeout matches C demo: req_delay * (N+1) + N + 5 ms
-        let global_timeout_ms = req_delay_ms * (MAX_HOPPING_CHANNELS as u32 + 1)
-            + MAX_HOPPING_CHANNELS as u32
-            + 5;
-        let deadline = Instant::now() + Duration::from_millis(global_timeout_ms as u64);
+        let global_timeout_ms =
+            req_delay_ms * (MAX_HOPPING_CHANNELS as u32 + 1) + MAX_HOPPING_CHANNELS as u32 + 5;
+        let deadline = Instant::now().add_ms(global_timeout_ms);
 
         // First channel fires after req_delay (gives subordinate time to switch modes)
-        Timer::after_millis(req_delay_ms as u64).await;
+        delay_ms(delay, req_delay_ms).await;
 
         let mut distance_results = [0i32; MAX_HOPPING_CHANNELS];
         let mut rssi_results = [0i8; MAX_HOPPING_CHANNELS];
@@ -374,7 +374,7 @@ impl RangingManager {
             radio.set_tx(0).await?;
 
             // Wait for the full RTToF exchange window
-            Timer::after_millis(req_delay_ms as u64).await;
+            delay_ms(delay, req_delay_ms).await;
 
             // Read result; miss is silent (channel stays at 0 in results arrays)
             if let Ok(r) = radio
@@ -387,14 +387,13 @@ impl RangingManager {
             }
 
             // Inter-channel processing pause
-            Timer::after_millis(DONE_PROCESSING_TIME_MS as u64).await;
+            delay_ms(delay, DONE_PROCESSING_TIME_MS).await;
         }
 
         // ── Aggregate results ───────────────────────────────────────────────
 
-        let per = 100u8.saturating_sub(
-            ((valid_count as u32 * 100) / MAX_HOPPING_CHANNELS as u32) as u8,
-        );
+        let per =
+            100u8.saturating_sub(((valid_count as u32 * 100) / MAX_HOPPING_CHANNELS as u32) as u8);
 
         let (status, median_distance_m) = if timed_out && valid_count == 0 {
             (RangingStatus::Timeout, 0.0)
@@ -427,13 +426,15 @@ impl RangingManager {
     // Subordinate
     // =========================================================================
 
-    async fn run_subordinate<Radio>(
+    async fn run_subordinate<Radio, D>(
         &mut self,
         radio: &mut Radio,
+        delay: &mut D,
         config: &RangingConfig,
     ) -> Result<RangingResult, RangingError>
     where
         Radio: RadioControlExt + RangingExt,
+        D: Delay,
     {
         let ldro = compute_ldro(config.bw, config.sf);
         let req_delay_ms = calculate_ranging_request_delay_ms(
@@ -448,7 +449,7 @@ impl RangingManager {
 
         self.setup_lora(radio, config, ldro).await?;
         radio.set_rx(RX_CONTINUOUS).await?;
-        Timer::after_millis(config.init_timeout_ms as u64).await;
+        delay_ms(delay, config.init_timeout_ms).await;
 
         let (pld_len, buf_ptr) = radio.get_rx_buffer_status().await?;
         if (pld_len as usize) < INIT_PAYLOAD_LENGTH {
@@ -475,14 +476,14 @@ impl RangingManager {
         rx_buf[5] = own_rssi as u8;
         radio.write_buffer(0, &rx_buf).await?;
         radio.set_tx(0).await?;
-        Timer::after_millis(lora_toa_ms as u64 + 5).await; // wait for TX_DONE
+        delay_ms(delay, lora_toa_ms + 5).await; // wait for TX_DONE
 
         // ── Phase 2: RTToF hopping (hardware auto-responds to requests) ──────
 
         self.setup_rttof_subordinate(radio, config, ldro).await?;
 
         // First channel: -1ms vs manager to ensure RX window opens before TX
-        Timer::after_millis(req_delay_ms.saturating_sub(1) as u64).await;
+        delay_ms(delay, req_delay_ms.saturating_sub(1)).await;
 
         for channel in 0..MAX_HOPPING_CHANNELS {
             radio
@@ -491,7 +492,7 @@ impl RangingManager {
             radio.set_rx(0).await?; // single-shot RX; hardware auto-responds
 
             // Hold the channel window open for the full exchange duration
-            Timer::after_millis((req_delay_ms + DONE_PROCESSING_TIME_MS) as u64).await;
+            delay_ms(delay, req_delay_ms + DONE_PROCESSING_TIME_MS).await;
         }
 
         // Subordinate has no per-channel results to report
@@ -529,10 +530,10 @@ impl RangingManager {
         radio
             .set_lora_pkt_params(
                 config.preamble_len,
-                0,                           // explicit header
+                0, // explicit header
                 INIT_PAYLOAD_LENGTH as u8,
-                1,                           // CRC on
-                0,                           // standard IQ
+                1, // CRC on
+                0, // standard IQ
             )
             .await?;
         radio
@@ -642,9 +643,9 @@ fn compute_ldro(bw: u8, sf: u8) -> u8 {
 fn lora_time_on_air_ms(config: &RangingConfig) -> u32 {
     crate::radio::get_lora_time_on_air_in_ms(
         config.preamble_len,
-        0,                           // explicit header
+        0, // explicit header
         INIT_PAYLOAD_LENGTH as u8,
-        1,                           // CRC on
+        1, // CRC on
         config.sf,
         config.bw,
         config.cr,
@@ -739,8 +740,17 @@ mod tests {
 
     #[test]
     fn test_bw_to_bandwidth() {
-        assert!(matches!(bw_to_bandwidth(lora_bw::BW_125), Bandwidth::_125KHz));
-        assert!(matches!(bw_to_bandwidth(lora_bw::BW_250), Bandwidth::_250KHz));
-        assert!(matches!(bw_to_bandwidth(lora_bw::BW_500), Bandwidth::_500KHz));
+        assert!(matches!(
+            bw_to_bandwidth(lora_bw::BW_125),
+            Bandwidth::_125KHz
+        ));
+        assert!(matches!(
+            bw_to_bandwidth(lora_bw::BW_250),
+            Bandwidth::_250KHz
+        ));
+        assert!(matches!(
+            bw_to_bandwidth(lora_bw::BW_500),
+            Bandwidth::_500KHz
+        ));
     }
 }

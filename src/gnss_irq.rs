@@ -87,11 +87,13 @@
 //!     ..Default::default()
 //! };
 //!
-//! wait_on_busy(|| radio.is_busy(), config.geoloc_us, &config).await?;
+//! wait_on_busy(|| radio.is_busy(), config.geoloc_us, &config, &mut delay).await?;
 //! ```
 
 use core::sync::atomic::{AtomicBool, Ordering};
-use embassy_time::Instant;
+
+use crate::time::{delay_ms, delay_us, Instant};
+use embedded_hal_async::delay::Delay;
 
 /// IRQ priority levels
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -340,13 +342,15 @@ impl Default for BusyTimeout {
 /// # Returns
 ///
 /// `Ok(())` if BUSY cleared within timeout, `Err(())` if timeout occurred
-pub async fn wait_on_busy<F>(
+pub async fn wait_on_busy<F, D>(
     mut is_busy: F,
     timeout_us: u32,
     config: &BusyTimeout,
+    delay: &mut D,
 ) -> Result<(), ()>
 where
     F: FnMut() -> bool,
+    D: Delay,
 {
     let mut accumulated_us = 0u32;
 
@@ -356,7 +360,7 @@ where
             return Ok(());
         }
 
-        embassy_time::Timer::after_micros(config.probe_period_us as u64).await;
+        delay_us(delay, config.probe_period_us).await;
         accumulated_us += config.probe_period_us;
     }
 
@@ -367,9 +371,9 @@ where
     let mut remaining_ms = remaining_us / 1000;
 
     while remaining_ms > 0 {
-        let delay_ms = remaining_ms.min(long_probe_ms);
-        embassy_time::Timer::after_millis(delay_ms as u64).await;
-        remaining_ms -= delay_ms;
+        let step_ms = remaining_ms.min(long_probe_ms);
+        delay_ms(delay, step_ms).await;
+        remaining_ms -= step_ms;
 
         if !is_busy() {
             return Ok(());
