@@ -118,6 +118,7 @@ jobs:
       - run: cargo doc ${{ env.DOCS_ARGS }}
 
   publish-dry-run:
+    if: false # Disabled until lora-phy is publishable on crates.io.
     name: Publish dry-run
     runs-on: ubuntu-latest
     continue-on-error: true
